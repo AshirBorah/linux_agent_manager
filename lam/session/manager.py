@@ -41,16 +41,19 @@ DEFAULT_PATTERNS: dict[str, list[str]] = {
 }
 
 StatusChangeCallback = Callable[[str, SessionState, SessionState], None]
+OutputCallback = Callable[[str, str], None]  # session_id, text
 
 
 class SessionManager:
     def __init__(
         self,
         on_status_change: StatusChangeCallback | None = None,
+        on_output: OutputCallback | None = None,
         patterns: dict[str, list[str]] | None = None,
     ) -> None:
         self._sessions: dict[str, Session] = {}
         self._on_status_change = on_status_change
+        self._on_output = on_output
         self._patterns = patterns or DEFAULT_PATTERNS
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -175,6 +178,9 @@ class SessionManager:
         text = data.decode("utf-8", errors="replace")
         session.output_buffer.append_data(text)
         session.last_activity = datetime.now(timezone.utc)
+
+        if self._on_output:
+            self._on_output(session_id, text)
 
         # Run pattern matcher on each new complete line.
         lines = text.split("\n")
