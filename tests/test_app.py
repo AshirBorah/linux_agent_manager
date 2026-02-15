@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-from textual.widgets import Button
 
 from lam.app import LAMApp
 from lam.ui.widgets import (
@@ -14,6 +13,7 @@ from lam.ui.widgets import (
     StatusBar,
     ToastOverlay,
 )
+from lam.ui.widgets.session_list_item import SessionListItem
 
 
 @pytest.fixture
@@ -50,3 +50,30 @@ async def test_session_header_initial_text(app: LAMApp) -> None:
         header = app.query_one(SessionHeader)
         text = str(header.render())
         assert "No session selected" in text
+
+
+@pytest.mark.asyncio
+async def test_new_session_creates_sidebar_item(app: LAMApp) -> None:
+    """Pressing Ctrl+N should create a session and add it to the sidebar."""
+    async with app.run_test() as pilot:
+        await pilot.press("ctrl+n")
+        await pilot.pause()
+        items = app.query(SessionListItem)
+        assert len(items) == 1
+        bar = app.query_one(StatusBar)
+        text = str(bar.render())
+        assert "Sessions: 1" in text
+
+
+@pytest.mark.asyncio
+async def test_toggle_sidebar(app: LAMApp) -> None:
+    """Ctrl+B should toggle sidebar visibility."""
+    async with app.run_test() as pilot:
+        sidebar = app.query_one(SessionSidebar)
+        assert sidebar.display is True
+        await pilot.press("ctrl+b")
+        await pilot.pause()
+        assert sidebar.display is False
+        await pilot.press("ctrl+b")
+        await pilot.pause()
+        assert sidebar.display is True
