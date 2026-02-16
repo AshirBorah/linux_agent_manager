@@ -271,6 +271,7 @@ class TAMEApp(App):
         self._session_manager.attach_to_loop(loop)
         self._session_manager.start_idle_checker()
         self.call_later(self._restore_tmux_sessions_async)
+        self._start_resource_poll()
         log.info("TAME started")
 
     # ------------------------------------------------------------------
@@ -815,6 +816,42 @@ class TAMEApp(App):
         if event.character is not None:
             return event.character
         return None
+
+    # ------------------------------------------------------------------
+    # Resource monitoring (#17)
+    # ------------------------------------------------------------------
+
+    def _start_resource_poll(self) -> None:
+        """Start periodic resource polling for the active session."""
+        cfg = self._config_manager.config
+        interval = float(cfg.get("sessions", {}).get("resource_poll_seconds", 5))
+        self._resource_poll_interval = interval
+        self.set_interval(interval, self._poll_resources, name="resource_poll")
+
+    def _poll_resources(self) -> None:
+        """Update HeaderBar with CPU/MEM for the active session's process."""
+        if self._active_session_id is None:
+            return
+        try:
+            session = self._session_manager.get_session(self._active_session_id)
+        except KeyError:
+            return
+        if session.pid is None:
+            return
+        try:
+            import psutil
+            proc = psutil.Process(session.pid)
+            cpu = proc.cpu_percent(interval=0)
+            mem_info = proc.memory_info()
+            mem_mb = mem_info.rss / (1024 * 1024)
+            if mem_mb >= 1024:
+                mem_str = f"{mem_mb / 1024:.1f}GB"
+            else:
+                mem_str = f"{mem_mb:.0f}MB"
+            header = self.query_one(HeaderBar)
+            header.update_system_stats(cpu, mem_str)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Cleanup

@@ -29,6 +29,7 @@ DEFAULT_CONFIG: dict = {
         "tmux_session_prefix": "tame",
         "max_concurrent_sessions": 0,
         "idle_threshold_seconds": 300,
+        "resource_poll_seconds": 5,
     },
     "patterns": {
         "prompt": {
