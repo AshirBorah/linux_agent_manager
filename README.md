@@ -1,3 +1,5 @@
+[![CI](https://github.com/AshirBorah/linux_agent_manager/actions/workflows/ci.yml/badge.svg)](https://github.com/AshirBorah/linux_agent_manager/actions/workflows/ci.yml)
+
 # TAME — Terminal Agent Management Environment
 
 An intelligent terminal multiplexer for managing multiple parallel AI agent sessions. Think tmux, but aware that AI agents are running and needing attention.
