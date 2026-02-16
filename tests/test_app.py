@@ -1,4 +1,4 @@
-"""Smoke tests for the LAMApp TUI using Textual's async pilot."""
+"""Smoke tests for the TAMEApp TUI using Textual's async pilot."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -7,26 +7,27 @@ import pytest
 from textual import events
 from textual.widgets import Input
 
-from lam.app import LAMApp
-from lam.session.output_buffer import OutputBuffer
-from lam.session.pattern_matcher import PatternMatcher
-from lam.session.session import Session
-from lam.session.state import SessionState
-from lam.ui.widgets import (
+from tame.app import TAMEApp
+from tame.session.output_buffer import OutputBuffer
+from tame.session.pattern_matcher import PatternMatcher
+from tame.session.session import Session
+from tame.session.state import SessionState
+from tame.ui.widgets import (
+    CommandPalette,
     HeaderBar,
     SessionSidebar,
     SessionViewer,
     StatusBar,
     ToastOverlay,
 )
-from lam.ui.widgets.session_list_item import SessionListItem
+from tame.ui.widgets.session_list_item import SessionListItem
 
 
 @pytest.fixture
-def app(tmp_path, monkeypatch) -> LAMApp:
+def app(tmp_path, monkeypatch) -> TAMEApp:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    app = LAMApp()
+    app = TAMEApp()
 
     def _fake_create_session(
         name: str,
@@ -70,7 +71,7 @@ async def _create_session_via_dialog(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_app_composes_all_widgets(app: LAMApp) -> None:
+async def test_app_composes_all_widgets(app: TAMEApp) -> None:
     """Verify all major widgets are present after mount."""
     async with app.run_test() as pilot:
         assert app.query_one(HeaderBar)
@@ -81,7 +82,7 @@ async def test_app_composes_all_widgets(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_status_bar_initial_text(app: LAMApp) -> None:
+async def test_status_bar_initial_text(app: TAMEApp) -> None:
     """Status bar should show zero sessions on launch."""
     async with app.run_test() as pilot:
         bar = app.query_one(StatusBar)
@@ -90,16 +91,16 @@ async def test_status_bar_initial_text(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_header_bar_initial_text(app: LAMApp) -> None:
-    """Header bar should show just 'LAM' on launch with no session selected."""
+async def test_header_bar_initial_text(app: TAMEApp) -> None:
+    """Header bar should show just 'TAME' on launch with no session selected."""
     async with app.run_test() as pilot:
         header = app.query_one(HeaderBar)
         text = str(header.render())
-        assert "LAM" in text
+        assert "TAME" in text
 
 
 @pytest.mark.asyncio
-async def test_new_session_creates_sidebar_item(app: LAMApp) -> None:
+async def test_new_session_creates_sidebar_item(app: TAMEApp) -> None:
     """Pressing F2 + Enter should create a session and add it to the sidebar."""
     async with app.run_test() as pilot:
         await _create_session_via_dialog(pilot)
@@ -111,7 +112,7 @@ async def test_new_session_creates_sidebar_item(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_toggle_sidebar(app: LAMApp) -> None:
+async def test_toggle_sidebar(app: TAMEApp) -> None:
     """F6 should toggle sidebar visibility."""
     async with app.run_test() as pilot:
         sidebar = app.query_one(SessionSidebar)
@@ -125,7 +126,7 @@ async def test_toggle_sidebar(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_receives_pty_output(app: LAMApp) -> None:
+async def test_session_receives_pty_output(app: TAMEApp) -> None:
     """Creating a session should produce PTY output (shell prompt) in the viewer."""
     async with app.run_test(size=(120, 40)) as pilot:
         await _create_session_via_dialog(pilot)
@@ -136,7 +137,7 @@ async def test_session_receives_pty_output(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_terminal_key_input_does_not_crash(app: LAMApp) -> None:
+async def test_terminal_key_input_does_not_crash(app: TAMEApp) -> None:
     """Typing text and pressing Enter in SessionViewer should not crash."""
     async with app.run_test(size=(120, 40)) as pilot:
         await _create_session_via_dialog(pilot)
@@ -149,7 +150,7 @@ async def test_terminal_key_input_does_not_crash(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_navigation_keys_do_not_crash(app: LAMApp) -> None:
+async def test_navigation_keys_do_not_crash(app: TAMEApp) -> None:
     """Arrow keys and Tab should be accepted and forwarded to PTY."""
     async with app.run_test(size=(120, 40)) as pilot:
         await _create_session_via_dialog(pilot)
@@ -165,7 +166,7 @@ async def test_navigation_keys_do_not_crash(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_header_updates_on_session_create(app: LAMApp) -> None:
+async def test_header_updates_on_session_create(app: TAMEApp) -> None:
     """Header bar should show session info after creating a session."""
     async with app.run_test(size=(120, 40)) as pilot:
         await _create_session_via_dialog(pilot)
@@ -175,7 +176,7 @@ async def test_header_updates_on_session_create(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_viewer_auto_focused_on_session_select(app: LAMApp) -> None:
+async def test_viewer_auto_focused_on_session_select(app: TAMEApp) -> None:
     """SessionViewer should receive focus when a session is selected."""
     async with app.run_test(size=(120, 40)) as pilot:
         await _create_session_via_dialog(pilot)
@@ -184,7 +185,7 @@ async def test_viewer_auto_focused_on_session_select(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_shift_tab_focuses_search(app: LAMApp) -> None:
+async def test_shift_tab_focuses_search(app: TAMEApp) -> None:
     async with app.run_test(size=(120, 40)) as pilot:
         await _create_session_via_dialog(pilot)
         viewer = app.query_one(SessionViewer)
@@ -196,7 +197,7 @@ async def test_shift_tab_focuses_search(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tab_from_search_returns_to_terminal(app: LAMApp) -> None:
+async def test_tab_from_search_returns_to_terminal(app: TAMEApp) -> None:
     async with app.run_test(size=(120, 40)) as pilot:
         await _create_session_via_dialog(pilot)
         await pilot.press("shift+tab")
@@ -210,7 +211,7 @@ async def test_tab_from_search_returns_to_terminal(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_click_sidebar_item_switches_session(app: LAMApp) -> None:
+async def test_click_sidebar_item_switches_session(app: TAMEApp) -> None:
     async with app.run_test(size=(120, 40)) as pilot:
         app._create_session("first")
         await pilot.pause()
@@ -229,7 +230,7 @@ async def test_click_sidebar_item_switches_session(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_name_dialog_custom_name(app: LAMApp) -> None:
+async def test_name_dialog_custom_name(app: TAMEApp) -> None:
     """Typing a custom name in the dialog should use that name."""
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.press("f2")
@@ -246,7 +247,7 @@ async def test_name_dialog_custom_name(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_name_dialog_escape_cancels(app: LAMApp) -> None:
+async def test_name_dialog_escape_cancels(app: TAMEApp) -> None:
     """Pressing Escape in the name dialog should not create a session."""
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.press("f2")
@@ -258,29 +259,84 @@ async def test_name_dialog_escape_cancels(app: LAMApp) -> None:
 
 
 @pytest.mark.asyncio
-async def test_empty_state_message(app: LAMApp) -> None:
-    """Viewer should show a welcome message when no session is active."""
+async def test_empty_state_message(app: TAMEApp) -> None:
+    """Viewer should show a branded welcome screen when no session is active."""
     async with app.run_test(size=(120, 40)) as pilot:
         viewer = app.query_one(SessionViewer)
         text = str(viewer.render())
-        assert "No active session" in text
-        assert "F2" in text
+        assert "Terminal Agent Management Environment" in text
+        assert "Ctrl+Space" in text
+        assert "Tame your AI agents." in text
 
 
 def test_key_to_pty_mapping(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    app = LAMApp()
+    app = TAMEApp()
     assert app._key_to_pty_input(events.Key("tab", None)) == "\t"
     assert app._key_to_pty_input(events.Key("up", None)) == "\x1b[A"
     assert app._key_to_pty_input(events.Key("ctrl+c", None)) == "\x03"
     assert app._key_to_pty_input(events.Key("a", "a")) == "a"
 
 
+@pytest.mark.asyncio
+async def test_command_mode_toggle(app: TAMEApp) -> None:
+    """Ctrl+Space should push the CommandPalette overlay."""
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("ctrl+@")
+        await pilot.pause()
+        assert isinstance(app.screen, CommandPalette)
+
+
+@pytest.mark.asyncio
+async def test_command_mode_dispatches_action(app: TAMEApp) -> None:
+    """Pressing 's' in the command palette should toggle the sidebar."""
+    async with app.run_test(size=(120, 40)) as pilot:
+        sidebar = app.query_one(SessionSidebar)
+        assert sidebar.display is True
+        await pilot.press("ctrl+@")
+        await pilot.pause()
+        assert isinstance(app.screen, CommandPalette)
+        await pilot.press("s")
+        await pilot.pause()
+        assert not isinstance(app.screen, CommandPalette)
+        assert sidebar.display is False
+
+
+@pytest.mark.asyncio
+async def test_command_mode_quit(app: TAMEApp, monkeypatch) -> None:
+    """Pressing 'q' in the command palette should trigger quit."""
+    exited = []
+    monkeypatch.setattr(app, "exit", lambda *a, **kw: exited.append(True))
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("ctrl+@")
+        await pilot.pause()
+        assert isinstance(app.screen, CommandPalette)
+        await pilot.press("q")
+        await pilot.pause()
+        await pilot.pause()
+        assert exited
+
+
+@pytest.mark.asyncio
+async def test_command_mode_escape_cancels(app: TAMEApp) -> None:
+    """Pressing Escape in the command palette should dismiss without action."""
+    async with app.run_test(size=(120, 40)) as pilot:
+        sidebar = app.query_one(SessionSidebar)
+        assert sidebar.display is True
+        await pilot.press("ctrl+@")
+        await pilot.pause()
+        assert isinstance(app.screen, CommandPalette)
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not isinstance(app.screen, CommandPalette)
+        assert sidebar.display is True
+
+
 def test_normalize_legacy_rate_limit_pattern(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    app = LAMApp()
+    app = TAMEApp()
     patterns = app._normalize_error_patterns(
         [r"(?i)\berror\b[:\s]", r"(?i)rate.?limit"]
     )
@@ -294,7 +350,46 @@ def test_normalize_legacy_rate_limit_pattern(tmp_path, monkeypatch) -> None:
 def test_normalize_legacy_prompt_patterns(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    app = LAMApp()
+    app = TAMEApp()
     patterns = app._normalize_prompt_patterns([r"\[y/n\]"])
     assert r"\?\s*$" in patterns
     assert r"Do you want to (?:continue|proceed)" in patterns
+
+
+def test_get_patterns_merges_shell_regexes(tmp_path, monkeypatch) -> None:
+    """Both agent and shell regexes should appear in the merged result, agent first."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    app = TAMEApp()
+    cfg = {
+        "patterns": {
+            "error": {
+                "regexes": [r"(?i)\berror\b[:\s]"],
+                "shell_regexes": [r"command not found"],
+            },
+        },
+    }
+    result = app._get_patterns_from_config(cfg)
+    assert result is not None
+    error_patterns = result["error"]
+    assert r"(?i)\berror\b[:\s]" in error_patterns
+    assert r"command not found" in error_patterns
+    # Agent patterns come before shell patterns
+    assert error_patterns.index(r"(?i)\berror\b[:\s]") < error_patterns.index(r"command not found")
+
+
+def test_get_patterns_works_without_shell_regexes(tmp_path, monkeypatch) -> None:
+    """Backward compat: categories with only 'regexes' should still work."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    app = TAMEApp()
+    cfg = {
+        "patterns": {
+            "error": {
+                "regexes": [r"(?i)\berror\b[:\s]"],
+            },
+        },
+    }
+    result = app._get_patterns_from_config(cfg)
+    assert result is not None
+    assert r"(?i)\berror\b[:\s]" in result["error"]

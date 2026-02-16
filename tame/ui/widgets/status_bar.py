@@ -19,11 +19,24 @@ class StatusBar(Static):
 
     def __init__(self) -> None:
         super().__init__("", id="status-bar")
-        self.update_stats(0, 0, 0, 0)
+        self._total: int = 0
+        self._active: int = 0
+        self._waiting: int = 0
+        self._errors: int = 0
+        self._refresh_display()
 
     def update_stats(self, total: int, active: int, waiting: int, errors: int) -> None:
         """Update the stats display."""
-        self.update(
-            f"Sessions: {total} | Active: {active} | Waiting: {waiting} "
-            f"| Errors: {errors} | F2 New | F3/F4 Switch | F12 Quit"
+        self._total = total
+        self._active = active
+        self._waiting = waiting
+        self._errors = errors
+        self._refresh_display()
+
+    def _refresh_display(self) -> None:
+        """Re-render the status bar text."""
+        stats = (
+            f"Sessions: {self._total} | Active: {self._active} | "
+            f"Waiting: {self._waiting} | Errors: {self._errors}"
         )
+        self.update(f"{stats} | C-SPC Cmd | F12 Quit")

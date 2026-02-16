@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from textual.widgets import Static
 
-from lam.session.session import Session
+from tame.session.session import Session
 
 
 class HeaderBar(Static):
@@ -20,14 +20,14 @@ class HeaderBar(Static):
     """
 
     def __init__(self) -> None:
-        super().__init__("LAM", id="header-bar")
+        super().__init__("TAME", id="header-bar")
         self._session_info: str = ""
         self._system_stats: str = ""
         self._refresh_content()
 
     def update_from_session(self, session: Session) -> None:
         """Show session name, status, and PID inline."""
-        from lam.session.state import SessionState
+        from tame.session.state import SessionState
 
         status_icons = {
             SessionState.ACTIVE: "\u25cf ACTIVE",
@@ -53,7 +53,7 @@ class HeaderBar(Static):
         self._refresh_content()
 
     def _refresh_content(self) -> None:
-        parts = ["LAM"]
+        parts = ["TAME"]
         if self._session_info:
             parts.append(self._session_info)
         if self._system_stats:

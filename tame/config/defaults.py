@@ -2,8 +2,8 @@ from __future__ import annotations
 
 DEFAULT_CONFIG: dict = {
     "general": {
-        "state_file": "~/.local/share/lam/state.db",
-        "log_file": "~/.local/share/lam/lam.log",
+        "state_file": "~/.local/share/tame/state.db",
+        "log_file": "~/.local/share/tame/tame.log",
         "log_level": "INFO",
         "max_buffer_lines": 10000,
         "autosave_interval_seconds": 60,
@@ -15,7 +15,7 @@ DEFAULT_CONFIG: dict = {
         "default_shell": "",
         "start_in_tmux": True,
         "restore_tmux_sessions_on_startup": True,
-        "tmux_session_prefix": "lam",
+        "tmux_session_prefix": "tame",
         "max_concurrent_sessions": 0,
         "idle_threshold_seconds": 300,
     },
@@ -29,7 +29,8 @@ DEFAULT_CONFIG: dict = {
                 r'Do you want to (?:continue|proceed)',
                 r'Press [Ee]nter to continue',
                 r'Allow .+ to .+\?',
-            ]
+            ],
+            "shell_regexes": [],
         },
         "error": {
             "regexes": [
@@ -38,20 +39,28 @@ DEFAULT_CONFIG: dict = {
                 r'Traceback \(most recent call last\)',
                 r'(?i)APIError',
                 r'(?i)rate.?limit(?:ed|ing)?(?:\s+(?:exceeded|reached|hit)|\s*[:\-])',
-            ]
+            ],
+            "shell_regexes": [
+                r'command not found',
+                r'No such file or directory',
+                r'Permission denied',
+                r'(?i)segmentation fault',
+            ],
         },
         "completion": {
             "regexes": [
                 r'(?i)task completed',
                 r'(?i)\bdone\.?$',
                 r'(?i)finished',
-            ]
+            ],
+            "shell_regexes": [],
         },
         "progress": {
             "regexes": [
                 r'\d+%',
                 r'Step \d+/\d+',
-            ]
+            ],
+            "shell_regexes": [],
         },
         "idle_prompt_timeout": 3.0,
     },

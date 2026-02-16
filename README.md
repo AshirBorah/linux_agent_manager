@@ -1,8 +1,8 @@
-# Linux Agent Manager (LAM)
+# TAME — Terminal Agent Management Environment
 
 An intelligent terminal multiplexer for managing multiple parallel AI agent sessions. Think tmux, but aware that AI agents are running and needing attention.
 
-LAM does **not** launch or orchestrate agents. You create PTY-backed shell sessions and run whatever CLI agent you want (`claude`, `codex`, `aider`, `gemini`, a custom script, etc.). LAM monitors the PTY output of each session using configurable regex patterns and notifies you when something needs your attention.
+TAME does **not** launch or orchestrate agents. You create PTY-backed shell sessions and run whatever CLI agent you want (`claude`, `codex`, `aider`, `gemini`, a custom script, etc.). TAME monitors the PTY output of each session using configurable regex patterns and notifies you when something needs your attention.
 
 ## Features
 
@@ -11,7 +11,7 @@ LAM does **not** launch or orchestrate agents. You create PTY-backed shell sessi
 - **Smart notifications** — desktop notifications, audio alerts, in-app toasts, and sidebar flashing when a session needs attention
 - **Tmux integration** — optionally back each session with a tmux session for persistence across restarts
 - **Keystroke passthrough** — full keyboard input forwarding (arrow keys, Ctrl sequences, Alt combos, Tab) to the active PTY
-- **TOML configuration** — `~/.config/lam/config.toml` with sensible defaults that work out of the box
+- **TOML configuration** — `~/.config/tame/config.toml` with sensible defaults that work out of the box
 
 ### Status indicators
 
@@ -27,7 +27,7 @@ LAM does **not** launch or orchestrate agents. You create PTY-backed shell sessi
 ## Requirements
 
 - Python 3.11+
-- Linux (PTY, `notify-send`, POSIX signals)
+- POSIX (Linux, macOS)
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - tmux (optional, for session persistence)
 
@@ -42,25 +42,42 @@ uv sync
 ## Usage
 
 ```bash
-uv run lam
+uv run tame
 ```
 
 ### Key bindings
 
-| Key         | Action          |
-|-------------|-----------------|
-| F2          | New session     |
-| F3 / F4     | Prev / Next     |
-| F6          | Toggle sidebar  |
-| F7 / F8     | Resume / Pause all |
-| F12         | Quit            |
-| Shift+Tab   | Focus search    |
+| Key         | Action              |
+|-------------|---------------------|
+| F2          | New session          |
+| F3 / F4     | Prev / Next          |
+| F6          | Toggle sidebar       |
+| F7 / F8     | Resume / Pause all   |
+| Ctrl+Space  | Command palette      |
+| F12         | Quit                 |
+| Shift+Tab   | Focus search         |
 
 All other keystrokes are forwarded to the active session's PTY.
 
+#### Command palette keys
+
+Press `Ctrl+Space` then one of:
+
+| Key | Action              |
+|-----|---------------------|
+| c   | New session          |
+| n   | Next session         |
+| p   | Previous session     |
+| k   | Kill session         |
+| s   | Toggle sidebar       |
+| r   | Resume all           |
+| z   | Pause all            |
+| x   | Clear notifications  |
+| q   | Quit                 |
+
 ## Configuration
 
-On first run, LAM creates `~/.config/lam/config.toml` with defaults. Key sections:
+On first run, TAME creates `~/.config/tame/config.toml` with defaults. Key sections:
 
 ```toml
 [sessions]
@@ -92,9 +109,9 @@ uv run pytest -k "pattern"                          # run specific tests
 ## Project structure
 
 ```
-lam/
+tame/
 ├── __main__.py               # Entry point
-├── app.py                    # LAMApp (Textual App)
+├── app.py                    # TAMEApp (Textual App)
 ├── config/                   # ConfigManager, defaults
 ├── session/                  # SessionManager, PTY, OutputBuffer, PatternMatcher
 ├── ui/widgets/               # Sidebar, Viewer, HeaderBar, StatusBar, etc.

@@ -4,19 +4,19 @@ from datetime import datetime, timezone
 
 import pytest
 
-from lam.app import LAMApp
-from lam.session.output_buffer import OutputBuffer
-from lam.session.pattern_matcher import PatternMatcher
-from lam.session.session import Session
-from lam.session.state import SessionState
-from lam.ui.widgets.session_list_item import SessionListItem
+from tame.app import TAMEApp
+from tame.session.output_buffer import OutputBuffer
+from tame.session.pattern_matcher import PatternMatcher
+from tame.session.session import Session
+from tame.session.state import SessionState
+from tame.ui.widgets.session_list_item import SessionListItem
 
 
 @pytest.fixture
-def app(tmp_path, monkeypatch) -> LAMApp:
+def app(tmp_path, monkeypatch) -> TAMEApp:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    app = LAMApp()
+    app = TAMEApp()
 
     def _fake_create_session(
         name: str,
@@ -51,7 +51,7 @@ def app(tmp_path, monkeypatch) -> LAMApp:
 
 
 @pytest.mark.asyncio
-async def test_session_list_item_renders_name_and_status(app: LAMApp) -> None:
+async def test_session_list_item_renders_name_and_status(app: TAMEApp) -> None:
     async with app.run_test() as pilot:
         app._create_session("session-visible")
         await pilot.pause()

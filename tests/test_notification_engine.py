@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from lam.notifications.engine import NotificationEngine
-from lam.notifications.models import EVENT_PRIORITY, EventType, Priority
+from tame.notifications.engine import NotificationEngine
+from tame.notifications.models import EVENT_PRIORITY, EventType, Priority
 
 
 def _make_engine(config: dict | None = None) -> NotificationEngine:

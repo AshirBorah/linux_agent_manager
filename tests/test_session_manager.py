@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from lam.session.manager import SessionManager
-from lam.session.output_buffer import OutputBuffer
-from lam.session.pattern_matcher import PatternMatcher
-from lam.session.session import Session
-from lam.session.state import SessionState
+from tame.session.manager import SessionManager
+from tame.session.output_buffer import OutputBuffer
+from tame.session.pattern_matcher import PatternMatcher
+from tame.session.session import Session
+from tame.session.state import SessionState
 
 
 def _make_manager_with_session() -> tuple[SessionManager, Session, list[tuple[SessionState, SessionState]]]:
@@ -125,3 +125,94 @@ def test_scan_pane_content_prompt_without_trailing_newline() -> None:
     pane_text = "Some output\nProceed? [y/n]"
     manager.scan_pane_content(session.id, pane_text)
     assert session.status is SessionState.WAITING
+
+
+# ------------------------------------------------------------------
+# Shell error detection
+# ------------------------------------------------------------------
+
+
+def test_shell_command_not_found_triggers_error_state() -> None:
+    manager, session, transitions = _make_manager_with_session()
+
+    manager._on_session_output(session.id, b"zsh: command not found: pytn\n")
+    assert session.status is SessionState.ERROR
+    assert (SessionState.ACTIVE, SessionState.ERROR) in transitions
+
+
+# ------------------------------------------------------------------
+# send_input state reset
+# ------------------------------------------------------------------
+
+
+class _FakePTY:
+    """Minimal stand-in for PTYProcess so send_input() can call write()."""
+
+    def write(self, text: str) -> None:
+        pass
+
+
+def _make_manager_with_pty_session(
+    initial_status: SessionState = SessionState.ACTIVE,
+) -> tuple[SessionManager, Session, list[tuple[SessionState, SessionState]]]:
+    transitions: list[tuple[SessionState, SessionState]] = []
+
+    def on_status(_sid: str, old: SessionState, new: SessionState) -> None:
+        transitions.append((old, new))
+
+    manager = SessionManager(on_status_change=on_status)
+    now = datetime.now(timezone.utc)
+    session = Session(
+        id="s1",
+        name="s1",
+        working_dir=".",
+        status=initial_status,
+        created_at=now,
+        last_activity=now,
+        output_buffer=OutputBuffer(),
+        pattern_matcher=PatternMatcher(manager._patterns),
+        pid=None,
+        pty_process=_FakePTY(),
+    )
+    manager._sessions[session.id] = session
+    return manager, session, transitions
+
+
+def test_send_input_resets_error_to_active() -> None:
+    manager, session, transitions = _make_manager_with_pty_session(SessionState.ERROR)
+
+    manager.send_input(session.id, "ls\n")
+    assert session.status is SessionState.ACTIVE
+    assert (SessionState.ERROR, SessionState.ACTIVE) in transitions
+
+
+def test_send_input_resets_waiting_to_active() -> None:
+    manager, session, transitions = _make_manager_with_pty_session(SessionState.WAITING)
+
+    manager.send_input(session.id, "y\n")
+    assert session.status is SessionState.ACTIVE
+    assert (SessionState.WAITING, SessionState.ACTIVE) in transitions
+
+
+def test_send_input_does_not_reset_done() -> None:
+    manager, session, transitions = _make_manager_with_pty_session(SessionState.DONE)
+
+    manager.send_input(session.id, "ls\n")
+    assert session.status is SessionState.DONE
+    assert transitions == []
+
+
+def test_send_input_does_not_reset_paused() -> None:
+    manager, session, transitions = _make_manager_with_pty_session(SessionState.PAUSED)
+
+    manager.send_input(session.id, "ls\n")
+    assert session.status is SessionState.PAUSED
+    assert transitions == []
+
+
+def test_send_input_noop_when_already_active() -> None:
+    manager, session, transitions = _make_manager_with_pty_session(SessionState.ACTIVE)
+
+    manager.send_input(session.id, "ls\n")
+    assert session.status is SessionState.ACTIVE
+    assert transitions == []

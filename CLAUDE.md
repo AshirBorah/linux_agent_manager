@@ -1,14 +1,14 @@
-# Linux Agent Manager (LAM)
+# TAME — Terminal Agent Management Environment
 
 ## Project Overview
-LAM is an intelligent terminal multiplexer for managing multiple parallel AI agent sessions. Think tmux, but aware that AI agents are running and needing attention. It does NOT launch or orchestrate agents — users create PTY-backed shell sessions and run whatever CLI agent they want.
+TAME is an intelligent terminal multiplexer for managing multiple parallel AI agent sessions. Think tmux, but aware that AI agents are running and needing attention. It does NOT launch or orchestrate agents — users create PTY-backed shell sessions and run whatever CLI agent they want.
 
 ## Tech Stack
 - **Language:** Python 3.11+ (developed on 3.12)
 - **UI Framework:** Textual (TUI)
 - **Build Tool:** uv
 - **Testing:** pytest + Textual pilot
-- **Platform:** Linux (PTY, notify-send, POSIX signals)
+- **Platform:** POSIX (Linux, macOS — PTY, notify-send/osascript, POSIX signals)
 
 ## Key Architecture Decisions
 - **PTY over PIPE:** Sessions use pseudo-terminals for real-time output, isatty()=True, and proper signal handling
@@ -16,13 +16,13 @@ LAM is an intelligent terminal multiplexer for managing multiple parallel AI age
 - **Line-based input:** v1 uses a text input widget that sends lines on Enter (not raw keystroke passthrough)
 - **Pattern matching on output:** Configurable regexes detect prompts, errors, completion, progress — drives notifications
 - **SQLite persistence:** Session metadata, output buffers (gzipped), scroll positions
-- **TOML config:** `~/.config/lam/config.toml`, created with defaults on first run
+- **TOML config:** `~/.config/tame/config.toml`, created with defaults on first run
 
 ## Project Structure
 ```
-lam/                          # Main package
+tame/                         # Main package
 ├── __main__.py               # Entry point
-├── app.py                    # LAMApp (Textual App)
+├── app.py                    # TAMEApp (Textual App)
 ├── config/                   # ConfigManager, defaults
 ├── session/                  # SessionManager, PTY, OutputBuffer, PatternMatcher
 ├── ui/widgets/               # Textual widgets (sidebar, viewer, input, header, status)
@@ -42,7 +42,7 @@ tests/                        # pytest tests mirroring src structure
 
 ## Commands
 ```bash
-uv run lam                    # Run the app
+uv run tame                   # Run the app
 uv run pytest                 # Run all tests
 uv run pytest tests/ -x       # Stop on first failure
 uv run pytest -k "pattern"    # Run specific tests

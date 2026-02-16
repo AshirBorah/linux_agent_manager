@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-log = logging.getLogger("lam.themes")
+log = logging.getLogger("tame.themes")
 
 BUILTIN_DIR = Path(__file__).parent / "builtin"
 

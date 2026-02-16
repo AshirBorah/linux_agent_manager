@@ -22,6 +22,11 @@ DEFAULT_PATTERNS: dict[str, list[str]] = {
         r"Traceback \(most recent call last\)",
         r"(?i)APIError",
         r"(?i)rate.?limit(?:ed|ing)?(?:\s+(?:exceeded|reached|hit)|\s*[:\-])",
+        # Shell patterns
+        r"command not found",
+        r"No such file or directory",
+        r"Permission denied",
+        r"(?i)segmentation fault",
     ],
     "prompt": [
         r"\[y/n\]",
@@ -40,6 +45,8 @@ DEFAULT_PATTERNS: dict[str, list[str]] = {
         r"(?i)step\s+\d+\s*/\s*\d+",
     ],
 }
+
+_INPUT_RESETS = frozenset({SessionState.ERROR, SessionState.WAITING})
 
 StatusChangeCallback = Callable[[str, SessionState, SessionState], None]
 OutputCallback = Callable[[str, str], None]  # session_id, text
@@ -168,6 +175,8 @@ class SessionManager:
             raise RuntimeError(f"Session {session_id} has no PTY process")
         session.pty_process.write(text)
         session.last_activity = datetime.now(timezone.utc)
+        if session.status in _INPUT_RESETS:
+            self._set_status(session, SessionState.ACTIVE)
 
     def resize_session(self, session_id: str, rows: int, cols: int) -> None:
         session = self._get(session_id)

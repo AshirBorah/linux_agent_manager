@@ -5,7 +5,7 @@ import os
 import tomllib
 from pathlib import Path
 
-from lam.config.defaults import DEFAULT_CONFIG
+from tame.config.defaults import DEFAULT_CONFIG
 
 
 class ConfigManager:
@@ -14,7 +14,7 @@ class ConfigManager:
             self._config_path = Path(config_path).expanduser()
         else:
             xdg = os.environ.get("XDG_CONFIG_HOME", "~/.config")
-            self._config_path = Path(xdg).expanduser() / "lam" / "config.toml"
+            self._config_path = Path(xdg).expanduser() / "tame" / "config.toml"
         self._config: dict = {}
 
     @property

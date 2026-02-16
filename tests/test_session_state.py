@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lam.session.state import SessionState
+from tame.session.state import SessionState
 
 
 def test_all_states_exist() -> None:

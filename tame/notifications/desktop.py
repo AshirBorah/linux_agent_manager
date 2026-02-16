@@ -52,7 +52,7 @@ class DesktopNotifier:
         if self.icon_path:
             cmd.extend(["--icon", self.icon_path])
 
-        title = f"LAM: {event.session_name}"
+        title = f"TAME: {event.session_name}"
         cmd.extend([title, event.message])
 
         try:

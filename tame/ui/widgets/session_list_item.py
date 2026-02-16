@@ -4,9 +4,9 @@ from rich.text import Text
 from textual import events
 from textual.widgets import Static
 
-from lam.session.session import Session
-from lam.session.state import SessionState
-from lam.ui.events import SessionSelected
+from tame.session.session import Session
+from tame.session.state import SessionState
+from tame.ui.events import SessionSelected
 
 STATUS_ICONS: dict[SessionState, str] = {
     SessionState.CREATED: "\u25cb",

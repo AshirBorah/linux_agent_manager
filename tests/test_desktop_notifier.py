@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from lam.notifications.desktop import DesktopNotifier
-from lam.notifications.models import EventType, NotificationEvent, Priority
+from tame.notifications.desktop import DesktopNotifier
+from tame.notifications.models import EventType, NotificationEvent, Priority
 
 
 def _make_event(**kwargs) -> NotificationEvent:
@@ -35,7 +35,7 @@ class TestDesktopNotifier:
 
         with (
             patch.object(notifier, "is_available", return_value=True),
-            patch("lam.notifications.desktop.subprocess.Popen") as mock_popen,
+            patch("tame.notifications.desktop.subprocess.Popen") as mock_popen,
         ):
             notifier.notify(event)
 
@@ -44,14 +44,14 @@ class TestDesktopNotifier:
         assert cmd[0] == "notify-send"
         assert "--urgency" in cmd
         assert "critical" in cmd
-        assert "LAM: agent-1" in cmd
+        assert "TAME: agent-1" in cmd
         assert "something broke" in cmd
 
     def test_disabled_does_nothing(self) -> None:
         notifier = DesktopNotifier(enabled=False)
         event = _make_event()
 
-        with patch("lam.notifications.desktop.subprocess.Popen") as mock_popen:
+        with patch("tame.notifications.desktop.subprocess.Popen") as mock_popen:
             notifier.notify(event)
 
         mock_popen.assert_not_called()

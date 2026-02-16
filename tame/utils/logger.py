@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def setup_logging(log_file: str = "", log_level: str = "INFO") -> logging.Logger:
-    logger = logging.getLogger("lam")
+    logger = logging.getLogger("tame")
     if logger.handlers:
         return logger
     logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))

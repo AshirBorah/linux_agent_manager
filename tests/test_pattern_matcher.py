@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lam.session.pattern_matcher import PatternMatcher
+from tame.session.pattern_matcher import PatternMatcher
 
 PATTERNS: dict[str, list[str]] = {
     "error": [
@@ -9,6 +9,11 @@ PATTERNS: dict[str, list[str]] = {
         r"Traceback \(most recent call last\)",
         r"(?i)APIError",
         r"(?i)rate.?limit(?:ed|ing)?(?:\s+(?:exceeded|reached|hit)|\s*[:\-])",
+        # Shell patterns
+        r"command not found",
+        r"No such file or directory",
+        r"Permission denied",
+        r"(?i)segmentation fault",
     ],
     "prompt": [
         r"\[y/n\]",
@@ -157,3 +162,42 @@ def test_priority_order_error_before_prompt() -> None:
 def test_no_match() -> None:
     m = _matcher().scan("just a normal output line")
     assert m is None
+
+
+# ── Shell error detection ────────────────────────────────────────
+
+
+def test_shell_error_bash_command_not_found() -> None:
+    m = _matcher().scan("bash: pytn: command not found")
+    assert m is not None
+    assert m.category == "error"
+
+
+def test_shell_error_zsh_command_not_found() -> None:
+    m = _matcher().scan("zsh: command not found: pytn")
+    assert m is not None
+    assert m.category == "error"
+
+
+def test_shell_error_no_such_file() -> None:
+    m = _matcher().scan("ls: cannot access '/nope': No such file or directory")
+    assert m is not None
+    assert m.category == "error"
+
+
+def test_shell_error_permission_denied() -> None:
+    m = _matcher().scan("bash: /etc/shadow: Permission denied")
+    assert m is not None
+    assert m.category == "error"
+
+
+def test_shell_error_segfault() -> None:
+    m = _matcher().scan("Segmentation fault (core dumped)")
+    assert m is not None
+    assert m.category == "error"
+
+
+def test_shell_error_segfault_lowercase() -> None:
+    m = _matcher().scan("segmentation fault")
+    assert m is not None
+    assert m.category == "error"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lam.session.output_buffer import OutputBuffer
+from tame.session.output_buffer import OutputBuffer
 
 
 def test_append_complete_lines() -> None:

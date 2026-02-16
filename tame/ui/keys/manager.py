@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 
-log = logging.getLogger("lam.keys")
+log = logging.getLogger("tame.keys")
 
 DEFAULT_KEYBINDINGS: dict[str, str] = {
     "new_session": "f2",

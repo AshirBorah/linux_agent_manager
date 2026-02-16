@@ -39,6 +39,13 @@ class ToastOverlay(Static):
         self.display = True
         self._dismiss_timer = self.set_timer(duration, self._dismiss)
 
+    def dismiss_now(self) -> None:
+        """Immediately hide the toast and cancel its timer."""
+        if self._dismiss_timer is not None:
+            self._dismiss_timer.stop()
+            self._dismiss_timer = None
+        self.display = False
+
     def _dismiss(self) -> None:
         """Hide the toast."""
         self.display = False

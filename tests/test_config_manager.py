@@ -4,8 +4,8 @@ import textwrap
 
 import pytest
 
-from lam.config.defaults import DEFAULT_CONFIG
-from lam.config.manager import ConfigManager
+from tame.config.defaults import DEFAULT_CONFIG
+from tame.config.manager import ConfigManager
 
 
 def test_default_config_has_all_sections() -> None:
@@ -48,7 +48,7 @@ def test_get_missing_key_returns_default() -> None:
 
 
 def test_load_creates_default_file(tmp_path: object) -> None:
-    config_file = tmp_path / "lam" / "config.toml"  # type: ignore[operator]
+    config_file = tmp_path / "tame" / "config.toml"  # type: ignore[operator]
     cm = ConfigManager(config_path=str(config_file))
     cfg = cm.load()
 
@@ -59,7 +59,7 @@ def test_load_creates_default_file(tmp_path: object) -> None:
 
 
 def test_load_merges_user_config(tmp_path: object) -> None:
-    config_file = tmp_path / "lam" / "config.toml"  # type: ignore[operator]
+    config_file = tmp_path / "tame" / "config.toml"  # type: ignore[operator]
     config_file.parent.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
     config_file.write_text(  # type: ignore[union-attr]
         textwrap.dedent("""\
@@ -81,7 +81,16 @@ def test_load_merges_user_config(tmp_path: object) -> None:
     assert cfg["sessions"]["auto_resume"] is True
 
     # Preserved defaults
-    assert cfg["general"]["state_file"] == "~/.local/share/lam/state.db"
+    assert cfg["general"]["state_file"] == "~/.local/share/tame/state.db"
     assert cfg["sessions"]["idle_threshold_seconds"] == 300
     assert "keybindings" in cfg
     assert cfg["keybindings"]["quit"] == "f12"
+
+
+def test_default_config_error_has_shell_regexes() -> None:
+    error_cfg = DEFAULT_CONFIG["patterns"]["error"]
+    assert "shell_regexes" in error_cfg
+    shell = error_cfg["shell_regexes"]
+    assert isinstance(shell, list)
+    assert len(shell) > 0
+    assert r"command not found" in shell

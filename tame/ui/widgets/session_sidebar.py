@@ -3,8 +3,8 @@ from __future__ import annotations
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Button, Input
 
-from lam.session.session import Session
-from lam.ui.widgets.session_list_item import SessionListItem
+from tame.session.session import Session
+from tame.ui.widgets.session_list_item import SessionListItem
 
 
 class SessionSidebar(Vertical):
@@ -71,6 +71,11 @@ class SessionSidebar(Vertical):
                 item.add_class("highlighted")
             else:
                 item.remove_class("highlighted")
+
+    def clear_all_flash(self) -> None:
+        """Remove the flash class from all session items."""
+        for item in self.query(SessionListItem):
+            item.remove_class("flash")
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Filter session list items by the search query."""

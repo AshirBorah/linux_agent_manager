@@ -13,20 +13,22 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Input
 
-from lam.config.manager import ConfigManager
-from lam.notifications.engine import NotificationEngine
-from lam.notifications.models import EventType
-from lam.session.manager import SessionManager
-from lam.session.state import SessionState
-from lam.ui.events import (
+from tame.config.manager import ConfigManager
+from tame.notifications.engine import NotificationEngine
+from tame.notifications.models import EventType
+from tame.session.manager import SessionManager
+from tame.session.state import SessionState
+from tame.ui.events import (
     SessionOutput,
     SessionSelected,
     SessionStatusChanged,
     SidebarFlash,
 )
-from lam.ui.keys.manager import KeybindManager
-from lam.ui.themes.manager import ThemeManager
-from lam.ui.widgets import (
+from tame.ui.keys.manager import KeybindManager
+from tame.ui.themes.manager import ThemeManager
+from tame.ui.widgets import (
+    CommandPalette,
+    ConfirmDialog,
     HeaderBar,
     NameDialog,
     SessionSidebar,
@@ -34,9 +36,9 @@ from lam.ui.widgets import (
     StatusBar,
     ToastOverlay,
 )
-from lam.utils.logger import setup_logging
+from tame.utils.logger import setup_logging
 
-log = logging.getLogger("lam.app")
+log = logging.getLogger("tame.app")
 
 EVENT_TYPE_FOR_STATE: dict[SessionState, EventType] = {
     SessionState.WAITING: EventType.INPUT_NEEDED,
@@ -87,7 +89,7 @@ CTRL_SPECIAL_SEQUENCES: dict[str, str] = {
 }
 
 
-class LAMApp(App):
+class TAMEApp(App):
     CSS = """
     Screen {
         background: #1e1e1e;
@@ -109,6 +111,18 @@ class LAMApp(App):
         height: 1fr;
     }
     """
+
+    COMMAND_MODE_MAP: dict[str, str] = {
+        "c": "new_session",
+        "n": "next_session",
+        "p": "prev_session",
+        "k": "kill_session",
+        "s": "toggle_sidebar",
+        "r": "resume_all",
+        "z": "pause_all",
+        "x": "clear_notifications",
+        "q": "quit",
+    }
 
     BINDINGS = [
         Binding("f2", "new_session", "New Session", show=True),
@@ -151,6 +165,8 @@ class LAMApp(App):
 
         self._keybind_manager = KeybindManager(cfg.get("keybindings"))
         self._reserved_keys = {binding.key for binding in self.BINDINGS}
+        self._reserved_keys.add("ctrl+@")
+        self._reserved_keys.add("ctrl+space")
 
         self._session_manager = SessionManager(
             on_status_change=self._handle_status_change,
@@ -167,8 +183,8 @@ class LAMApp(App):
         self._restore_tmux_sessions_on_startup = bool(
             sessions_cfg.get("restore_tmux_sessions_on_startup", True)
         )
-        tmux_prefix = str(sessions_cfg.get("tmux_session_prefix", "lam")).strip()
-        self._tmux_session_prefix = tmux_prefix or "lam"
+        tmux_prefix = str(sessions_cfg.get("tmux_session_prefix", "tame")).strip()
+        self._tmux_session_prefix = tmux_prefix or "tame"
         self._tmux_available = shutil.which("tmux") is not None
         if self._start_in_tmux and not self._tmux_available:
             log.warning("sessions.start_in_tmux=true but tmux is not installed; falling back to shell")
@@ -187,13 +203,14 @@ class LAMApp(App):
         result: dict[str, list[str]] = {}
         for category in ("error", "prompt", "completion", "progress"):
             cat_cfg = patterns_cfg.get(category, {})
-            if isinstance(cat_cfg, dict) and "regexes" in cat_cfg:
-                regexes = list(cat_cfg["regexes"])
+            if isinstance(cat_cfg, dict) and ("regexes" in cat_cfg or "shell_regexes" in cat_cfg):
+                regexes = list(cat_cfg.get("regexes", []))
+                shell_regexes = list(cat_cfg.get("shell_regexes", []))
                 if category == "error":
                     regexes = self._normalize_error_patterns(regexes)
                 elif category == "prompt":
                     regexes = self._normalize_prompt_patterns(regexes)
-                result[category] = regexes
+                result[category] = regexes + shell_regexes
         return result or None
 
     def _normalize_error_patterns(self, regexes: list[str]) -> list[str]:
@@ -231,8 +248,8 @@ class LAMApp(App):
     def on_mount(self) -> None:
         loop = asyncio.get_running_loop()
         self._session_manager.attach_to_loop(loop)
-        self._restore_tmux_sessions()
-        log.info("LAM started")
+        self.call_later(self._restore_tmux_sessions_async)
+        log.info("TAME started")
 
     # ------------------------------------------------------------------
     # Session status change callback (from SessionManager, may be called
@@ -259,7 +276,7 @@ class LAMApp(App):
         try:
             toast = self.query_one(ToastOverlay)
             toast.show_toast(
-                title=f"LAM [{event.event_type.value}]",
+                title=f"TAME [{event.event_type.value}]",
                 message=f"{event.session_name}: {event.message}",
             )
         except Exception:
@@ -286,7 +303,7 @@ class LAMApp(App):
 
     def on_sidebar_flash(self, event: SidebarFlash) -> None:
         try:
-            from lam.ui.widgets.session_list_item import SessionListItem
+            from tame.ui.widgets.session_list_item import SessionListItem
             item = self.query_one(f"#session-item-{event.session_id}", SessionListItem)
             item.add_class("flash")
             self.set_timer(2.0, lambda: item.remove_class("flash"))
@@ -305,6 +322,14 @@ class LAMApp(App):
         self._resize_active_session()
 
     def on_key(self, event: events.Key) -> None:
+        # --- Open command palette overlay ---
+        if event.key in ("ctrl+@", "ctrl+space"):
+            if not isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
+                self.push_screen(CommandPalette(), callback=self._handle_command_result)
+            event.stop()
+            return
+
+        # --- Normal key forwarding ---
         if not self._should_forward_key(event):
             return
 
@@ -316,8 +341,34 @@ class LAMApp(App):
         event.stop()
 
     # ------------------------------------------------------------------
+    # Command palette callback
+    # ------------------------------------------------------------------
+
+    def _handle_command_result(self, action_name: str | None) -> None:
+        if action_name is None:
+            return
+        method = getattr(self, f"action_{action_name}", None)
+        if method is None:
+            return
+        if asyncio.iscoroutinefunction(method):
+            self.call_later(method)
+        else:
+            method()
+
+    # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
+
+    def action_clear_notifications(self) -> None:
+        """Dismiss the current toast and clear all sidebar flashes."""
+        try:
+            self.query_one(ToastOverlay).dismiss_now()
+        except Exception:
+            pass
+        try:
+            self.query_one(SessionSidebar).clear_all_flash()
+        except Exception:
+            pass
 
     def action_new_session(self) -> None:
         default_name = f"session-{len(self._session_manager.list_sessions()) + 1}"
@@ -364,8 +415,52 @@ class LAMApp(App):
     def action_pause_all(self) -> None:
         self._session_manager.pause_all()
 
+    def action_kill_session(self) -> None:
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
+            return
+        if self._active_session_id is None:
+            return
+        try:
+            session = self._session_manager.get_session(self._active_session_id)
+        except KeyError:
+            return
+        self.push_screen(
+            ConfirmDialog(f"Kill session '{session.name}'?"),
+            callback=self._confirm_kill_session,
+        )
+
+    def _confirm_kill_session(self, confirmed: bool) -> None:
+        if not confirmed:
+            return
+        session_id = self._active_session_id
+        if session_id is None:
+            return
+
+        sidebar = self.query_one(SessionSidebar)
+        viewer = self.query_one(SessionViewer)
+
+        sidebar.remove_session(session_id)
+        viewer.remove_session(session_id)
+
+        try:
+            self._session_manager.delete_session(session_id)
+        except KeyError:
+            pass
+
+        # Switch to the next available session or clear
+        sessions = self._session_manager.list_sessions()
+        if sessions:
+            self._select_session(sessions[0].id)
+        else:
+            self._active_session_id = None
+            header = self.query_one(HeaderBar)
+            header.clear_session()
+
+        self._update_status_bar()
+        log.info("Killed session %s", session_id)
+
     def action_send_tab(self) -> None:
-        if isinstance(self.screen, NameDialog):
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
             return
         if self._active_session_id is None:
             return
@@ -376,7 +471,7 @@ class LAMApp(App):
             pass
 
     def action_focus_search(self) -> None:
-        if isinstance(self.screen, NameDialog):
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
             return
         sidebar = self.query_one(SessionSidebar)
         search_input = sidebar.query_one("#session-search", Input)
@@ -401,7 +496,7 @@ class LAMApp(App):
         header.update_from_session(session)
 
         viewer = self.query_one(SessionViewer)
-        viewer.load_buffer(session.output_buffer)
+        viewer.load_session(session_id, session.output_buffer)
         viewer.focus()
         self._resize_active_session()
 
@@ -437,15 +532,70 @@ class LAMApp(App):
         self.post_message(SessionOutput(session_id, text))
 
     def on_session_output(self, event: SessionOutput) -> None:
+        viewer = self.query_one(SessionViewer)
         if event.session_id == self._active_session_id:
-            viewer = self.query_one(SessionViewer)
             viewer.append_output(event.data)
+        else:
+            viewer.feed_session(event.session_id, event.data)
 
     # ------------------------------------------------------------------
     # Terminal input + resize helpers
     # ------------------------------------------------------------------
 
+    async def _restore_tmux_sessions_async(self) -> None:
+        """Non-blocking tmux session restore — runs subprocess calls in executor."""
+        if not (
+            self._start_in_tmux
+            and self._tmux_available
+            and self._restore_tmux_sessions_on_startup
+        ):
+            return
+
+        loop = asyncio.get_running_loop()
+        tmux_sessions = await loop.run_in_executor(
+            None, self._list_existing_tmux_sessions
+        )
+        if not tmux_sessions:
+            return
+
+        working_dir = self._default_working_dir
+        if not os.path.isdir(working_dir):
+            working_dir = os.path.expanduser("~")
+
+        sidebar = self.query_one(SessionSidebar)
+        restored_count = 0
+        for tmux_session in tmux_sessions:
+            display_name = self._display_name_for_tmux_session(tmux_session)
+            try:
+                session = self._session_manager.create_session(
+                    display_name,
+                    working_dir,
+                    shell=self._default_shell,
+                    command=["tmux", "attach-session", "-t", tmux_session],
+                )
+            except Exception:
+                log.exception("Failed to restore tmux session '%s'", tmux_session)
+                continue
+
+            session.metadata["tmux_session_name"] = tmux_session
+
+            pane_text = await loop.run_in_executor(
+                None, self._capture_tmux_pane, tmux_session
+            )
+            if pane_text:
+                self._session_manager.scan_pane_content(session.id, pane_text)
+
+            sidebar.add_session(session)
+            if self._active_session_id is None:
+                self._select_session(session.id)
+            restored_count += 1
+
+        if restored_count:
+            self._update_status_bar()
+            log.info("Restored %d tmux session(s)", restored_count)
+
     def _restore_tmux_sessions(self) -> None:
+        """Synchronous tmux session restore (used by tests)."""
         if not (
             self._start_in_tmux
             and self._tmux_available

@@ -1,8 +1,8 @@
-/* LAM Dark Theme (Default) */
+/* TAME Light Theme */
 
 Screen {
-    background: #1e1e1e;
-    color: #d4d4d4;
+    background: #ffffff;
+    color: #333333;
 }
 
 #header-bar {
@@ -15,8 +15,8 @@ Screen {
 
 #sidebar {
     width: 28;
-    background: #252526;
-    border-right: solid #3c3c3c;
+    background: #f3f3f3;
+    border-right: solid #e0e0e0;
 }
 
 #sidebar-search {
@@ -25,7 +25,7 @@ Screen {
 }
 
 #session-list {
-    background: #252526;
+    background: #f3f3f3;
 }
 
 .session-item {
@@ -34,15 +34,15 @@ Screen {
 }
 
 .session-item:hover {
-    background: #2a2d2e;
+    background: #e8e8e8;
 }
 
 .session-item.--highlight {
-    background: #37373d;
+    background: #d6ebff;
 }
 
 .session-item.status-active {
-    color: #4ec9b0;
+    color: #16825d;
 }
 
 .session-item.status-idle {
@@ -50,15 +50,15 @@ Screen {
 }
 
 .session-item.status-waiting {
-    color: #f48771;
+    color: #e45649;
 }
 
 .session-item.status-error {
-    color: #f44747;
+    color: #d32f2f;
 }
 
 .session-item.status-done {
-    color: #4ec9b0;
+    color: #16825d;
 }
 
 .session-item.status-paused {
@@ -68,32 +68,32 @@ Screen {
 #new-session-btn {
     margin: 0 1;
     height: 1;
-    background: #3c3c3c;
-    color: #d4d4d4;
+    background: #e0e0e0;
+    color: #333333;
 }
 
 #main-panel {
-    background: #1e1e1e;
+    background: #ffffff;
 }
 
 #session-header {
     height: 2;
-    background: #252526;
+    background: #f3f3f3;
     padding: 0 1;
     color: #858585;
-    border-bottom: solid #3c3c3c;
+    border-bottom: solid #e0e0e0;
 }
 
 #session-viewer {
-    background: #1e1e1e;
-    color: #d4d4d4;
+    background: #ffffff;
+    color: #333333;
 }
 
 #input-area {
     dock: bottom;
     height: 3;
-    background: #252526;
-    border-top: solid #3c3c3c;
+    background: #f3f3f3;
+    border-top: solid #e0e0e0;
     padding: 0 1;
 }
 
