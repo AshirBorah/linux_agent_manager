@@ -57,6 +57,7 @@ class SessionManager:
         patterns: dict[str, list[str]] | None = None,
     ) -> None:
         self._sessions: dict[str, Session] = {}
+        self._scan_partials: dict[str, str] = {}
         self._on_status_change = on_status_change
         self._on_output = on_output
         self._patterns = patterns or DEFAULT_PATTERNS
@@ -106,6 +107,7 @@ class SessionManager:
         session = self._get(session_id)
         if session.pty_process:
             session.pty_process.close()
+        self._scan_partials.pop(session_id, None)
         del self._sessions[session_id]
 
     def get_session(self, session_id: str) -> Session:
@@ -174,6 +176,7 @@ class SessionManager:
 
         if not data:
             # EOF — process exited.
+            self._scan_partials.pop(session_id, None)
             exit_code = (
                 session.pty_process.exit_code
                 if session.pty_process
@@ -193,10 +196,15 @@ class SessionManager:
         if self._on_output:
             self._on_output(session_id, text)
 
-        # Run pattern matcher on each new complete line.
+        # Run pattern matcher on each complete line, preserving split lines
+        # across PTY read boundaries.
         cleaned = ANSI_ESCAPE_RE.sub("", text)
-        lines = cleaned.split("\n")
-        for line in lines:
+        combined = self._scan_partials.get(session_id, "") + cleaned
+        parts = combined.split("\n")
+        complete_lines = parts[:-1]
+        self._scan_partials[session_id] = parts[-1]
+
+        for line in complete_lines:
             if not line:
                 continue
             match: PatternMatch | None = session.pattern_matcher.scan(line)
@@ -209,6 +217,13 @@ class SessionManager:
             elif match.category == "completion":
                 self._set_status(session, SessionState.DONE)
             # progress is informational — no status change
+
+        # Some interactive CLIs print prompts without trailing newline.
+        partial = self._scan_partials.get(session_id, "")
+        if partial:
+            partial_match = session.pattern_matcher.scan(partial)
+            if partial_match and partial_match.category == "prompt":
+                self._set_status(session, SessionState.WAITING)
 
     # ------------------------------------------------------------------
     # Event loop integration
@@ -234,6 +249,7 @@ class SessionManager:
             if session.pty_process:
                 session.pty_process.close()
         self._sessions.clear()
+        self._scan_partials.clear()
 
     # ------------------------------------------------------------------
     # Helpers
