@@ -121,6 +121,7 @@ class TAMEApp(App):
         "r": "resume_all",
         "z": "pause_all",
         "x": "clear_notifications",
+        "m": "rename_session",
         "q": "quit",
     }
 
@@ -486,6 +487,49 @@ class TAMEApp(App):
 
         self._update_status_bar()
         log.info("Killed session %s", session_id)
+
+    def action_rename_session(self) -> None:
+        """Open a name dialog to rename the active session."""
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
+            return
+        if self._active_session_id is None:
+            return
+        try:
+            session = self._session_manager.get_session(self._active_session_id)
+        except KeyError:
+            return
+        self.push_screen(
+            NameDialog(session.name),
+            callback=self._confirm_rename_session,
+        )
+
+    def _confirm_rename_session(self, new_name: str | None) -> None:
+        if new_name is None:
+            return
+        session_id = self._active_session_id
+        if session_id is None:
+            return
+        self._session_manager.rename_session(session_id, new_name)
+        try:
+            session = self._session_manager.get_session(session_id)
+        except KeyError:
+            return
+        sidebar = self.query_one(SessionSidebar)
+        sidebar.update_session(session)
+        header = self.query_one(HeaderBar)
+        header.update_from_session(session)
+        # Rename tmux session if applicable
+        tmux_name = session.metadata.get("tmux_session_name")
+        if tmux_name:
+            new_tmux = self._build_tmux_session_name(new_name)
+            if new_tmux:
+                import subprocess
+                subprocess.run(
+                    ["tmux", "rename-session", "-t", tmux_name, new_tmux],
+                    capture_output=True, check=False,
+                )
+                session.metadata["tmux_session_name"] = new_tmux
+        log.info("Renamed session %s to '%s'", session_id, new_name)
 
     def action_send_tab(self) -> None:
         if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):

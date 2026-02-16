@@ -92,6 +92,11 @@ class SessionManager:
     def get_session(self, session_id: str) -> Session:
         return self._get(session_id)
 
+    def rename_session(self, session_id: str, new_name: str) -> None:
+        """Rename an existing session."""
+        session = self._get(session_id)
+        session.name = new_name
+
     def list_sessions(self) -> list[Session]:
         return list(self._sessions.values())
 
