@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from textual.containers import Vertical, VerticalScroll
-from textual.widgets import Button, Input
+from textual.widgets import Button, Input, Label
 
 from tame.session.session import Session
 from tame.ui.widgets.session_list_item import SessionListItem
@@ -26,6 +26,14 @@ class SessionSidebar(Vertical):
         height: 1fr;
     }
 
+    SessionSidebar #no-results {
+        display: none;
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        padding: 2 1;
+    }
+
     SessionSidebar #new-session-btn {
         margin: 1;
         width: 100%;
@@ -34,7 +42,8 @@ class SessionSidebar(Vertical):
 
     def compose(self):
         yield Input(placeholder="Search sessions...", id="session-search")
-        yield VerticalScroll(id="session-scroll")
+        with VerticalScroll(id="session-scroll"):
+            yield Label("No matching sessions", id="no-results")
         yield Button("+ New Session", id="new-session-btn", variant="primary")
 
     def add_session(self, session: Session) -> None:
@@ -82,8 +91,11 @@ class SessionSidebar(Vertical):
         if event.input.id != "session-search":
             return
         query = event.value.strip().lower()
+        any_visible = False
         for item in self.query(SessionListItem):
-            if query == "" or query in item._session_name.lower():
-                item.display = True
-            else:
-                item.display = False
+            visible = query == "" or query in item._session_name.lower()
+            item.display = visible
+            if visible:
+                any_visible = True
+        no_results = self.query_one("#no-results", Label)
+        no_results.display = not any_visible and query != ""
