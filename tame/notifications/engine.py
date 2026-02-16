@@ -8,6 +8,7 @@ from .audio import AudioNotifier
 from .desktop import DesktopNotifier
 from .history import NotificationHistory
 from .models import EVENT_PRIORITY, EventType, NotificationEvent, Priority
+from .slack import SlackNotifier
 
 # Seconds before the same (session, event_type) can fire again.
 _DEFAULT_COOLDOWN: dict[EventType, float] = {
@@ -66,6 +67,14 @@ class NotificationEngine:
         history_cfg = config.get("history", {})
         self._history = NotificationHistory(
             max_size=history_cfg.get("max_size", 500),
+        )
+
+        slack_cfg = config.get("slack", {})
+        self._slack = SlackNotifier(
+            enabled=slack_cfg.get("enabled", False),
+            webhook_url=slack_cfg.get("webhook_url", ""),
+            events=slack_cfg.get("events"),
+            sessions=slack_cfg.get("sessions"),
         )
 
         self._routing: dict[str, dict[str, bool]] = config.get(
@@ -134,6 +143,9 @@ class NotificationEngine:
 
         if routes.get("sidebar_flash", False) and self.on_sidebar_flash is not None:
             self.on_sidebar_flash(event)
+
+        # Slack has its own event/session filtering (not tied to routing table)
+        self._slack.notify(event)
 
         return event
 

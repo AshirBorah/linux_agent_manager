@@ -116,6 +116,12 @@ DEFAULT_CONFIG: dict = {
                 "default": "",
             },
         },
+        "slack": {
+            "enabled": False,
+            "webhook_url": "",
+            "events": [],
+            "sessions": [],
+        },
         "toast": {
             "enabled": True,
             "display_seconds": 5,
