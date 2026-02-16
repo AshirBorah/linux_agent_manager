@@ -19,7 +19,6 @@ from tame.notifications.models import EventType
 from tame.session.manager import SessionManager
 from tame.session.state import SessionState
 from tame.ui.events import (
-    SessionOutput,
     SessionSelected,
     SessionStatusChanged,
     SidebarFlash,
@@ -229,6 +228,11 @@ class TAMEApp(App):
         self._active_session_id: str | None = None
         self._pending_status_updates: set[str] = set()
         self._status_update_scheduled: bool = False
+
+        # Batched PTY output: accumulate chunks per session, flush on timer
+        self._output_pending: dict[str, list[str]] = {}
+        self._output_flush_timer: object | None = None  # Timer handle
+        self._app_focused: bool = True
 
     def _get_patterns_from_config(self, cfg: dict) -> dict[str, list[str]]:
         patterns_cfg = cfg.get("patterns", {})
@@ -667,18 +671,56 @@ class TAMEApp(App):
         bar.update_stats(total, active, waiting, errors)
 
     # ------------------------------------------------------------------
-    # PTY output -> UI
+    # PTY output -> UI (batched, focus-aware)
     # ------------------------------------------------------------------
 
     def _handle_pty_output(self, session_id: str, text: str) -> None:
-        self.post_message(SessionOutput(session_id, text))
+        """Accumulate PTY output; flush immediately for small output (echo),
+        batch at 16ms for bulk output."""
+        self._output_pending.setdefault(session_id, []).append(text)
+        if not self._app_focused:
+            return
+        # Small output (keystroke echo): flush immediately
+        total = sum(len(c) for chunks in self._output_pending.values() for c in chunks)
+        if total <= 64:
+            if self._output_flush_timer is not None:
+                self._output_flush_timer.stop()
+                self._output_flush_timer = None
+            self._flush_pending_output()
+        elif self._output_flush_timer is None:
+            self._output_flush_timer = self.set_timer(
+                0.016, self._flush_pending_output, name="output_flush"
+            )
 
-    def on_session_output(self, event: SessionOutput) -> None:
+    def _flush_pending_output(self) -> None:
+        """Drain accumulated output — one pyte.feed() per session."""
+        self._output_flush_timer = None
+        pending = self._output_pending
+        if not pending:
+            return
+        self._output_pending = {}
+
         viewer = self.query_one(SessionViewer)
-        if event.session_id == self._active_session_id:
-            viewer.append_output(event.data)
-        else:
-            viewer.feed_session(event.session_id, event.data)
+        for session_id, chunks in pending.items():
+            combined = "".join(chunks)
+            if session_id == self._active_session_id:
+                viewer.append_output(combined)
+            else:
+                # Background session: discard cached pyte state so it
+                # rebuilds from OutputBuffer when the user switches to it.
+                viewer.invalidate_session(session_id)
+
+    def on_app_blur(self, event: events.AppBlur) -> None:
+        """App lost focus — pause output processing to avoid hidden work."""
+        self._app_focused = False
+        if self._output_flush_timer is not None:
+            self._output_flush_timer.stop()
+            self._output_flush_timer = None
+
+    def on_app_focus(self, event: events.AppFocus) -> None:
+        """App regained focus — flush any accumulated output in one batch."""
+        self._app_focused = True
+        self._flush_pending_output()
 
     # ------------------------------------------------------------------
     # Terminal input + resize helpers

@@ -3,15 +3,6 @@ from __future__ import annotations
 from textual.message import Message
 
 
-class SessionOutput(Message):
-    """New output data from a session's PTY."""
-
-    def __init__(self, session_id: str, data: str) -> None:
-        super().__init__()
-        self.session_id = session_id
-        self.data = data
-
-
 class SessionStatusChanged(Message):
     """A session's status has changed."""
 

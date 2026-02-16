@@ -9,6 +9,12 @@ from .desktop import DesktopNotifier
 from .history import NotificationHistory
 from .models import EVENT_PRIORITY, EventType, NotificationEvent, Priority
 
+# Seconds before the same (session, event_type) can fire again.
+_DEFAULT_COOLDOWN: dict[EventType, float] = {
+    EventType.ERROR: 60.0,
+    EventType.SESSION_IDLE: 120.0,
+}
+
 log = logging.getLogger(__name__)
 
 DEFAULT_ROUTING: dict[str, dict[str, bool]] = {
@@ -74,6 +80,9 @@ class NotificationEngine:
         self.on_toast: Callable[[NotificationEvent], Any] | None = None
         self.on_sidebar_flash: Callable[[NotificationEvent], Any] | None = None
 
+        # Per-(session, event_type) cooldown to avoid notification spam.
+        self._last_fired: dict[tuple[str, EventType], float] = {}
+
     def dispatch(
         self,
         event_type: EventType,
@@ -97,6 +106,20 @@ class NotificationEngine:
         if self._is_dnd():
             log.debug("DND active — suppressing notification channels")
             return event
+
+        # Per-(session, event_type) cooldown to suppress repeated noise.
+        cooldown = _DEFAULT_COOLDOWN.get(event_type, 0.0)
+        if cooldown > 0:
+            key = (session_id, event_type)
+            now = datetime.now().timestamp()
+            last = self._last_fired.get(key, 0.0)
+            if now - last < cooldown:
+                log.debug(
+                    "Suppressed %s for session %s (cooldown %.0fs)",
+                    event_type.value, session_id, cooldown,
+                )
+                return event
+            self._last_fired[key] = now
 
         routes = self._routing.get(event_type.value, {})
 

@@ -187,6 +187,18 @@ class SessionViewer(Widget):
         if terminal is not None:
             terminal.feed(text)
 
+    def invalidate_session(self, session_id: str) -> None:
+        """Drop cached terminal state for a background session.
+
+        When the user later switches to this session, ``load_session()``
+        will rebuild the terminal from the OutputBuffer automatically.
+        """
+        if session_id in self._terminals:
+            terminal = self._terminals.pop(session_id)
+            # Never invalidate the active terminal — only background ones
+            if self._active_terminal is terminal:
+                self._terminals[session_id] = terminal
+
     def remove_session(self, session_id: str) -> None:
         """Discard cached terminal state for a deleted session."""
         terminal = self._terminals.pop(session_id, None)
@@ -317,11 +329,21 @@ class SessionViewer(Widget):
                     visible_lines.append(screen.buffer.get(y, {}))
 
             for y_idx, row in enumerate(visible_lines[:rows]):
+                run_chars: list[str] = []
+                run_style: Style | None = None
                 for x in range(cols):
                     char = row.get(x)
                     symbol = " " if char is None else (char.data or " ")
                     style = self._char_style(char)
-                    output.append(symbol, style=style)
+                    if style == run_style:
+                        run_chars.append(symbol)
+                    else:
+                        if run_chars:
+                            output.append("".join(run_chars), style=run_style)
+                        run_chars = [symbol]
+                        run_style = style
+                if run_chars:
+                    output.append("".join(run_chars), style=run_style)
                 if y_idx < rows - 1:
                     output.append("\n")
         else:
@@ -335,6 +357,8 @@ class SessionViewer(Widget):
 
             for y in range(rows):
                 row = buffer.get(y, {})
+                run_chars: list[str] = []
+                run_style: Style | None = None
                 for x in range(cols):
                     char = row.get(x)
                     symbol = " " if char is None else (char.data or " ")
@@ -346,7 +370,15 @@ class SessionViewer(Widget):
                         and y == cursor_y
                     ):
                         style += Style(reverse=True)
-                    output.append(symbol, style=style)
+                    if style == run_style:
+                        run_chars.append(symbol)
+                    else:
+                        if run_chars:
+                            output.append("".join(run_chars), style=run_style)
+                        run_chars = [symbol]
+                        run_style = style
+                if run_chars:
+                    output.append("".join(run_chars), style=run_style)
                 if y < rows - 1:
                     output.append("\n")
 
