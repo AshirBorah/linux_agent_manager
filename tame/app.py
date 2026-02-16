@@ -257,7 +257,8 @@ class TAMEApp(App):
     # ------------------------------------------------------------------
 
     def _handle_status_change(
-        self, session_id: str, old_state: SessionState, new_state: SessionState
+        self, session_id: str, old_state: SessionState, new_state: SessionState,
+        matched_text: str = "",
     ) -> None:
         self.post_message(
             SessionStatusChanged(session_id, old_state.value, new_state.value)
@@ -265,11 +266,15 @@ class TAMEApp(App):
         event_type = EVENT_TYPE_FOR_STATE.get(new_state)
         if event_type:
             session = self._session_manager.get_session(session_id)
+            msg = f"Session '{session.name}' is now {new_state.value}"
+            if matched_text:
+                msg += f": {matched_text}"
             self._notification_engine.dispatch(
                 event_type=event_type,
                 session_id=session_id,
                 session_name=session.name,
-                message=f"Session '{session.name}' is now {new_state.value}",
+                message=msg,
+                matched_text=matched_text,
             )
 
     def _handle_notification_toast(self, event) -> None:

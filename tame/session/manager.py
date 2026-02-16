@@ -17,7 +17,7 @@ from .state import SessionState
 
 _INPUT_RESETS = frozenset({SessionState.ERROR, SessionState.WAITING})
 
-StatusChangeCallback = Callable[[str, SessionState, SessionState], None]
+StatusChangeCallback = Callable[[str, SessionState, SessionState, str], None]
 OutputCallback = Callable[[str, str], None]  # session_id, text
 
 ANSI_ESCAPE_RE = re.compile(
@@ -192,11 +192,11 @@ class SessionManager:
             if match is None:
                 continue
             if match.category == "error":
-                self._set_status(session, SessionState.ERROR)
+                self._set_status(session, SessionState.ERROR, line.strip())
             elif match.category == "prompt":
-                self._set_status(session, SessionState.WAITING)
+                self._set_status(session, SessionState.WAITING, line.strip())
             elif match.category == "completion":
-                self._set_status(session, SessionState.DONE)
+                self._set_status(session, SessionState.DONE, line.strip())
             # progress is informational — no status change
 
         # Some interactive CLIs print prompts without trailing newline.
@@ -204,7 +204,7 @@ class SessionManager:
         if partial:
             partial_match = session.pattern_matcher.scan(partial)
             if partial_match and partial_match.category == "prompt":
-                self._set_status(session, SessionState.WAITING)
+                self._set_status(session, SessionState.WAITING, partial.strip())
 
     # ------------------------------------------------------------------
     # Pane content scanning (for tmux restore)
@@ -242,11 +242,11 @@ class SessionManager:
         if last_match is None:
             return
         if last_match.category == "error":
-            self._set_status(session, SessionState.ERROR)
+            self._set_status(session, SessionState.ERROR, last_match.line.strip())
         elif last_match.category == "prompt":
-            self._set_status(session, SessionState.WAITING)
+            self._set_status(session, SessionState.WAITING, last_match.line.strip())
         elif last_match.category == "completion":
-            self._set_status(session, SessionState.DONE)
+            self._set_status(session, SessionState.DONE, last_match.line.strip())
 
     # ------------------------------------------------------------------
     # Event loop integration
@@ -284,10 +284,12 @@ class SessionManager:
         except KeyError:
             raise KeyError(f"No session with id {session_id!r}") from None
 
-    def _set_status(self, session: Session, new_state: SessionState) -> None:
+    def _set_status(
+        self, session: Session, new_state: SessionState, matched_text: str = ""
+    ) -> None:
         old_state = session.status
         if old_state is new_state:
             return
         session.status = new_state
         if self._on_status_change:
-            self._on_status_change(session.id, old_state, new_state)
+            self._on_status_change(session.id, old_state, new_state, matched_text)

@@ -12,7 +12,7 @@ from tame.session.state import SessionState
 def _make_manager_with_session() -> tuple[SessionManager, Session, list[tuple[SessionState, SessionState]]]:
     transitions: list[tuple[SessionState, SessionState]] = []
 
-    def on_status(_sid: str, old: SessionState, new: SessionState) -> None:
+    def on_status(_sid: str, old: SessionState, new: SessionState, _matched: str = "") -> None:
         transitions.append((old, new))
 
     manager = SessionManager(on_status_change=on_status)
@@ -157,7 +157,7 @@ def _make_manager_with_pty_session(
 ) -> tuple[SessionManager, Session, list[tuple[SessionState, SessionState]]]:
     transitions: list[tuple[SessionState, SessionState]] = []
 
-    def on_status(_sid: str, old: SessionState, new: SessionState) -> None:
+    def on_status(_sid: str, old: SessionState, new: SessionState, _matched: str = "") -> None:
         transitions.append((old, new))
 
     manager = SessionManager(on_status_change=on_status)
