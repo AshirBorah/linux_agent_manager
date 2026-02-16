@@ -19,12 +19,14 @@ PATTERNS: dict[str, list[str]] = {
         r"\[y/n\]",
         r"\[Y/n\]",
         r"\[yes/no\]",
-        r"(?i)approve|deny",
-        r"\?\s*$",
+        r"\(a\)pprove.*\(d\)eny",
+        r"Do you want to (?:continue|proceed)",
+        r"Press [Ee]nter to continue",
+        r"Allow .+ to .+\?",
     ],
     "completion": [
         r"(?i)\btask completed\b",
-        r"(?i)\bdone\b",
+        r"(?i)^\s*done\.?\s*$",
         r"(?i)\bfinished\b",
     ],
     "progress": [
@@ -60,13 +62,25 @@ def test_prompt_detection_yes_no() -> None:
 
 
 def test_prompt_detection_approve_deny() -> None:
-    m = _matcher().scan("Please approve this action")
+    m = _matcher().scan("(a)pprove or (d)eny this action")
     assert m is not None
     assert m.category == "prompt"
 
 
-def test_prompt_detection_question_mark() -> None:
-    m = _matcher().scan("What is your name? ")
+def test_prompt_detection_do_you_want_to_continue() -> None:
+    m = _matcher().scan("Do you want to continue?")
+    assert m is not None
+    assert m.category == "prompt"
+
+
+def test_prompt_detection_press_enter() -> None:
+    m = _matcher().scan("Press Enter to continue")
+    assert m is not None
+    assert m.category == "prompt"
+
+
+def test_prompt_detection_allow_question() -> None:
+    m = _matcher().scan("Allow tool_use to read file.txt?")
     assert m is not None
     assert m.category == "prompt"
 
@@ -118,10 +132,28 @@ def test_completion_detection_task_completed() -> None:
     assert m.category == "completion"
 
 
-def test_completion_detection_done() -> None:
-    m = _matcher().scan("Build done.")
+def test_completion_detection_done_standalone() -> None:
+    m = _matcher().scan("done")
     assert m is not None
     assert m.category == "completion"
+
+
+def test_completion_detection_done_with_period() -> None:
+    m = _matcher().scan("Done.")
+    assert m is not None
+    assert m.category == "completion"
+
+
+def test_completion_done_rejects_embedded() -> None:
+    """'done' embedded in a longer line should NOT match."""
+    m = _matcher().scan("Build done.")
+    assert m is None or m.category != "completion"
+
+
+def test_completion_done_rejects_casual_log() -> None:
+    """Casual log lines containing 'done' should NOT match."""
+    m = _matcher().scan("Task is done now")
+    assert m is None or m.category != "completion"
 
 
 def test_completion_detection_finished() -> None:
@@ -201,3 +233,32 @@ def test_shell_error_segfault_lowercase() -> None:
     m = _matcher().scan("segmentation fault")
     assert m is not None
     assert m.category == "error"
+
+
+# ── get_default_patterns_flat / weak_prompt ─────────────────────
+
+
+def test_flat_patterns_include_weak_prompt() -> None:
+    from tame.config.defaults import get_default_patterns_flat
+
+    flat = get_default_patterns_flat()
+    assert "weak_prompt" in flat
+    assert isinstance(flat["weak_prompt"], list)
+    assert len(flat["weak_prompt"]) > 0
+    assert r"\?\s*$" in flat["weak_prompt"]
+
+
+def test_flat_patterns_prompt_excludes_weak() -> None:
+    """Strong prompt patterns should not contain the weak regex."""
+    from tame.config.defaults import get_default_patterns_flat
+
+    flat = get_default_patterns_flat()
+    assert r"\?\s*$" not in flat["prompt"]
+
+
+def test_flat_patterns_has_standard_categories() -> None:
+    from tame.config.defaults import get_default_patterns_flat
+
+    flat = get_default_patterns_flat()
+    for cat in ("error", "prompt", "completion", "progress"):
+        assert cat in flat

@@ -11,6 +11,10 @@ def get_default_patterns_flat() -> dict[str, list[str]]:
             regexes = list(cat_cfg.get("regexes", []))
             shell_regexes = list(cat_cfg.get("shell_regexes", []))
             result[category] = regexes + shell_regexes
+    # Expose weak prompt patterns separately for timeout gating
+    prompt_cfg = patterns_cfg.get("prompt", {})
+    if isinstance(prompt_cfg, dict):
+        result["weak_prompt"] = list(prompt_cfg.get("weak_regexes", []))
     return result
 
 
@@ -41,6 +45,9 @@ DEFAULT_CONFIG: dict = {
                 r'Press [Ee]nter to continue',
                 r'Allow .+ to .+\?',
             ],
+            "weak_regexes": [
+                r'\?\s*$',
+            ],
             "shell_regexes": [],
         },
         "error": {
@@ -61,7 +68,7 @@ DEFAULT_CONFIG: dict = {
         "completion": {
             "regexes": [
                 r'(?i)task completed',
-                r'(?i)\bdone\.?$',
+                r'(?i)^\s*done\.?\s*$',
                 r'(?i)finished',
             ],
             "shell_regexes": [],
