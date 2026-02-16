@@ -120,6 +120,7 @@ class TAMEApp(App):
         "s": "toggle_sidebar",
         "r": "resume_all",
         "z": "pause_all",
+        "u": "check_usage",
         "x": "clear_notifications",
         "m": "rename_session",
         "q": "quit",
@@ -550,6 +551,32 @@ class TAMEApp(App):
                 )
                 session.metadata["tmux_session_name"] = new_tmux
         log.info("Renamed session %s to '%s'", session_id, new_name)
+
+    def action_check_usage(self) -> None:
+        """Send a usage command to the active session to trigger usage parsing."""
+        if self._active_session_id is None:
+            return
+        try:
+            session = self._session_manager.get_session(self._active_session_id)
+        except KeyError:
+            return
+        # If we already have usage info, show it via toast
+        if session.usage.model_name or session.usage.tokens_used is not None:
+            parts = []
+            if session.usage.model_name:
+                parts.append(f"Model: {session.usage.model_name}")
+            if session.usage.tokens_used is not None:
+                parts.append(f"Tokens: {session.usage.tokens_used:,}")
+            if session.usage.quota_remaining:
+                parts.append(f"Remaining: {session.usage.quota_remaining}")
+            if session.usage.refresh_time:
+                parts.append(f"Resets: {session.usage.refresh_time}")
+            msg = " | ".join(parts) if parts else "No usage data available"
+            try:
+                toast = self.query_one(ToastOverlay)
+                toast.show_toast(title="Usage Info", message=msg)
+            except Exception:
+                pass
 
     def action_send_tab(self) -> None:
         if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):

@@ -23,6 +23,7 @@ class HeaderBar(Static):
         super().__init__("TAME", id="header-bar")
         self._session_info: str = ""
         self._system_stats: str = ""
+        self._usage_info: str = ""
         self._refresh_content()
 
     def update_from_session(self, session: Session) -> None:
@@ -40,11 +41,23 @@ class HeaderBar(Static):
         status = status_icons.get(session.status, session.status.value)
         pid_str = str(session.pid) if session.pid is not None else "-"
         self._session_info = f"{session.name} | {status} | PID {pid_str}"
+        # Update usage display from session
+        usage_parts: list[str] = []
+        if session.usage.model_name:
+            usage_parts.append(session.usage.model_name)
+        if session.usage.tokens_used is not None:
+            usage_parts.append(f"{session.usage.tokens_used:,}tok")
+        if session.usage.quota_remaining:
+            usage_parts.append(session.usage.quota_remaining)
+        if session.usage.refresh_time:
+            usage_parts.append(f"resets {session.usage.refresh_time}")
+        self._usage_info = " ".join(usage_parts)
         self._refresh_content()
 
     def clear_session(self) -> None:
         """Reset to no-session state."""
         self._session_info = ""
+        self._usage_info = ""
         self._refresh_content()
 
     def update_system_stats(self, cpu_percent: float, memory_used: str) -> None:
@@ -56,6 +69,8 @@ class HeaderBar(Static):
         parts = ["TAME"]
         if self._session_info:
             parts.append(self._session_info)
+        if self._usage_info:
+            parts.append(self._usage_info)
         if self._system_stats:
             parts.append(self._system_stats)
         self.update(" | ".join(parts))

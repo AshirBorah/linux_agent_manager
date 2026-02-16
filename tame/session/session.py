@@ -11,6 +11,17 @@ from .state import AttentionState, ProcessState, SessionState, compute_session_s
 
 
 @dataclass
+class UsageInfo:
+    """Parsed AI model usage data for a session."""
+    model_name: str = ""
+    messages_used: int | None = None
+    tokens_used: int | None = None
+    quota_remaining: str = ""
+    refresh_time: str = ""
+    raw_text: str = ""
+
+
+@dataclass
 class Session:
     id: str                            # UUID
     name: str                          # User-editable display name
@@ -26,6 +37,7 @@ class Session:
     input_history: list[str] = field(default_factory=list)
     pty_process: PTYProcess | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    usage: UsageInfo = field(default_factory=UsageInfo)
 
     @property
     def status(self) -> SessionState:

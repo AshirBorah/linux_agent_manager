@@ -12,8 +12,20 @@ from tame.config.defaults import get_default_patterns_flat
 from .output_buffer import OutputBuffer
 from .pattern_matcher import PatternMatcher, PatternMatch
 from .pty_process import PTYProcess
-from .session import Session
+from .session import Session, UsageInfo
 from .state import AttentionState, ProcessState, SessionState
+
+# Built-in usage patterns for common AI CLIs
+_USAGE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    # Claude Code: "Opus messages: 42/100 remaining"
+    ("messages_used", re.compile(r"(\w+)\s+messages?:\s*(\d+)/(\d+)\s*remaining", re.IGNORECASE)),
+    # Generic token count: "Tokens used: 12345" or "tokens: 12,345"
+    ("tokens_used", re.compile(r"tokens?\s*(?:used)?:\s*([\d,]+)", re.IGNORECASE)),
+    # Model name: "Model: claude-3-opus" or "Using model: gpt-4"
+    ("model_name", re.compile(r"(?:using\s+)?model:\s*(\S+)", re.IGNORECASE)),
+    # Reset/refresh time: "Resets in 2h 30m" or "Refresh: 3:00 PM"
+    ("refresh_time", re.compile(r"(?:resets?\s+in|refresh(?:es)?(?:\s+(?:at|in))?)\s*:?\s*(.+)", re.IGNORECASE)),
+]
 
 StatusChangeCallback = Callable[[str, SessionState, SessionState, str], None]
 OutputCallback = Callable[[str, str], None]  # session_id, text
@@ -239,6 +251,37 @@ class SessionManager:
                 self._set_attention_state(session, AttentionState.NEEDS_INPUT, partial.strip())
             elif partial_match and partial_match.category == "weak_prompt":
                 self._schedule_weak_prompt(session_id, partial.strip())
+
+        # Scan for usage/quota info (#20)
+        for line in complete_lines:
+            if line:
+                self._scan_usage(session, line)
+
+    # ------------------------------------------------------------------
+    # Usage/quota parsing (#20)
+    # ------------------------------------------------------------------
+
+    def _scan_usage(self, session: Session, line: str) -> None:
+        """Check a line for usage/quota patterns and update session.usage."""
+        cleaned = ANSI_ESCAPE_RE.sub("", line)
+        for kind, rx in _USAGE_PATTERNS:
+            m = rx.search(cleaned)
+            if m is None:
+                continue
+            if kind == "messages_used":
+                session.usage.model_name = m.group(1)
+                used = int(m.group(2))
+                total = int(m.group(3))
+                session.usage.messages_used = total - int(m.group(3)) + used
+                session.usage.quota_remaining = f"{m.group(3)} of {total}"
+                session.usage.raw_text = m.group(0)
+            elif kind == "tokens_used":
+                session.usage.tokens_used = int(m.group(1).replace(",", ""))
+                session.usage.raw_text = m.group(0)
+            elif kind == "model_name":
+                session.usage.model_name = m.group(1)
+            elif kind == "refresh_time":
+                session.usage.refresh_time = m.group(1).strip()
 
     # ------------------------------------------------------------------
     # Weak prompt timeout gating (#7)
