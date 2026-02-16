@@ -6,7 +6,7 @@ from tame.session.manager import SessionManager
 from tame.session.output_buffer import OutputBuffer
 from tame.session.pattern_matcher import PatternMatcher
 from tame.session.session import Session
-from tame.session.state import SessionState
+from tame.session.state import AttentionState, ProcessState, SessionState
 
 
 def _make_manager_with_session() -> tuple[SessionManager, Session, list[tuple[SessionState, SessionState]]]:
@@ -21,7 +21,8 @@ def _make_manager_with_session() -> tuple[SessionManager, Session, list[tuple[Se
         id="s1",
         name="s1",
         working_dir=".",
-        status=SessionState.ACTIVE,
+        process_state=ProcessState.RUNNING,
+        attention_state=AttentionState.NONE,
         created_at=now,
         last_activity=now,
         output_buffer=OutputBuffer(),
@@ -153,7 +154,8 @@ class _FakePTY:
 
 
 def _make_manager_with_pty_session(
-    initial_status: SessionState = SessionState.ACTIVE,
+    process_state: ProcessState = ProcessState.RUNNING,
+    attention_state: AttentionState = AttentionState.NONE,
 ) -> tuple[SessionManager, Session, list[tuple[SessionState, SessionState]]]:
     transitions: list[tuple[SessionState, SessionState]] = []
 
@@ -166,7 +168,8 @@ def _make_manager_with_pty_session(
         id="s1",
         name="s1",
         working_dir=".",
-        status=initial_status,
+        process_state=process_state,
+        attention_state=attention_state,
         created_at=now,
         last_activity=now,
         output_buffer=OutputBuffer(),
@@ -179,7 +182,9 @@ def _make_manager_with_pty_session(
 
 
 def test_send_input_resets_error_to_active() -> None:
-    manager, session, transitions = _make_manager_with_pty_session(SessionState.ERROR)
+    manager, session, transitions = _make_manager_with_pty_session(
+        attention_state=AttentionState.ERROR_SEEN,
+    )
 
     manager.send_input(session.id, "ls\n")
     assert session.status is SessionState.ACTIVE
@@ -187,7 +192,9 @@ def test_send_input_resets_error_to_active() -> None:
 
 
 def test_send_input_resets_waiting_to_active() -> None:
-    manager, session, transitions = _make_manager_with_pty_session(SessionState.WAITING)
+    manager, session, transitions = _make_manager_with_pty_session(
+        attention_state=AttentionState.NEEDS_INPUT,
+    )
 
     manager.send_input(session.id, "y\n")
     assert session.status is SessionState.ACTIVE
@@ -195,7 +202,9 @@ def test_send_input_resets_waiting_to_active() -> None:
 
 
 def test_send_input_does_not_reset_done() -> None:
-    manager, session, transitions = _make_manager_with_pty_session(SessionState.DONE)
+    manager, session, transitions = _make_manager_with_pty_session(
+        process_state=ProcessState.EXITED,
+    )
 
     manager.send_input(session.id, "ls\n")
     assert session.status is SessionState.DONE
@@ -203,24 +212,64 @@ def test_send_input_does_not_reset_done() -> None:
 
 
 def test_send_input_does_not_reset_paused() -> None:
-    manager, session, transitions = _make_manager_with_pty_session(SessionState.PAUSED)
+    manager, session, transitions = _make_manager_with_pty_session(
+        process_state=ProcessState.PAUSED,
+    )
 
     manager.send_input(session.id, "ls\n")
     assert session.status is SessionState.PAUSED
     assert transitions == []
 
 
-def test_rename_session() -> None:
-    mgr = SessionManager()
-    session = mgr.create_session("old-name", "/tmp")
-    mgr.rename_session(session.id, "new-name")
-    assert mgr.get_session(session.id).name == "new-name"
-    mgr.close_all()
-
-
 def test_send_input_noop_when_already_active() -> None:
-    manager, session, transitions = _make_manager_with_pty_session(SessionState.ACTIVE)
+    manager, session, transitions = _make_manager_with_pty_session()
 
     manager.send_input(session.id, "ls\n")
     assert session.status is SessionState.ACTIVE
     assert transitions == []
+
+
+def test_rename_session() -> None:
+    manager = SessionManager()
+    session = manager.create_session("old-name", "/tmp")
+    manager.rename_session(session.id, "new-name")
+    assert manager.get_session(session.id).name == "new-name"
+    manager.close_all()
+
+
+# ------------------------------------------------------------------
+# ProcessState + AttentionState (#4)
+# ------------------------------------------------------------------
+
+
+def test_session_status_is_derived_property() -> None:
+    """Status should be computed from process_state + attention_state."""
+    manager, session, _ = _make_manager_with_session()
+    assert session.process_state is ProcessState.RUNNING
+    assert session.attention_state is AttentionState.NONE
+    assert session.status is SessionState.ACTIVE
+
+
+def test_attention_needs_input_gives_waiting() -> None:
+    manager, session, _ = _make_manager_with_session()
+    session.attention_state = AttentionState.NEEDS_INPUT
+    assert session.status is SessionState.WAITING
+
+
+def test_exited_with_error_gives_error() -> None:
+    manager, session, _ = _make_manager_with_session()
+    session.process_state = ProcessState.EXITED
+    session.attention_state = AttentionState.ERROR_SEEN
+    assert session.status is SessionState.ERROR
+
+
+def test_exited_clean_gives_done() -> None:
+    manager, session, _ = _make_manager_with_session()
+    session.process_state = ProcessState.EXITED
+    assert session.status is SessionState.DONE
+
+
+def test_paused_gives_paused() -> None:
+    manager, session, _ = _make_manager_with_session()
+    session.process_state = ProcessState.PAUSED
+    assert session.status is SessionState.PAUSED

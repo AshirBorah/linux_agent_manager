@@ -8,7 +8,7 @@ from tame.app import TAMEApp
 from tame.session.output_buffer import OutputBuffer
 from tame.session.pattern_matcher import PatternMatcher
 from tame.session.session import Session
-from tame.session.state import SessionState
+from tame.session.state import AttentionState, ProcessState, SessionState
 from tame.ui.widgets.session_list_item import SessionListItem
 from tame.ui.widgets.session_sidebar import SessionSidebar
 from textual.widgets import Label
@@ -26,7 +26,8 @@ def _make_session(app: TAMEApp, name: str) -> Session:
         id=session_id,
         name=name,
         working_dir="/tmp",
-        status=SessionState.ACTIVE,
+        process_state=ProcessState.RUNNING,
+        attention_state=AttentionState.NONE,
         created_at=now,
         last_activity=now,
         output_buffer=OutputBuffer(),

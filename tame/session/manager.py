@@ -13,9 +13,7 @@ from .output_buffer import OutputBuffer
 from .pattern_matcher import PatternMatcher, PatternMatch
 from .pty_process import PTYProcess
 from .session import Session
-from .state import SessionState
-
-_INPUT_RESETS = frozenset({SessionState.ERROR, SessionState.WAITING})
+from .state import AttentionState, ProcessState, SessionState
 
 StatusChangeCallback = Callable[[str, SessionState, SessionState, str], None]
 OutputCallback = Callable[[str, str], None]  # session_id, text
@@ -64,7 +62,8 @@ class SessionManager:
             id=session_id,
             name=name,
             working_dir=working_dir,
-            status=SessionState.ACTIVE,
+            process_state=ProcessState.RUNNING,
+            attention_state=AttentionState.NONE,
             created_at=now,
             last_activity=now,
             output_buffer=OutputBuffer(),
@@ -108,13 +107,13 @@ class SessionManager:
         session = self._get(session_id)
         if session.pty_process and session.pty_process.is_alive:
             session.pty_process.pause()
-            self._set_status(session, SessionState.PAUSED)
+            self._set_process_state(session, ProcessState.PAUSED)
 
     def resume_session(self, session_id: str) -> None:
         session = self._get(session_id)
         if session.pty_process and session.pty_process.is_alive:
             session.pty_process.resume()
-            self._set_status(session, SessionState.ACTIVE)
+            self._set_process_state(session, ProcessState.RUNNING)
 
     def pause_all(self) -> None:
         for sid in list(self._sessions):
@@ -134,7 +133,7 @@ class SessionManager:
         for session in list(self._sessions.values()):
             if session.pty_process and session.pty_process.is_alive:
                 session.pty_process.terminate()
-                self._set_status(session, SessionState.DONE)
+                self._set_process_state(session, ProcessState.EXITED)
 
     # ------------------------------------------------------------------
     # I/O
@@ -146,8 +145,9 @@ class SessionManager:
             raise RuntimeError(f"Session {session_id} has no PTY process")
         session.pty_process.write(text)
         session.last_activity = datetime.now(timezone.utc)
-        if session.status in _INPUT_RESETS:
-            self._set_status(session, SessionState.ACTIVE)
+        # Clear attention on user input (#5)
+        if session.attention_state in (AttentionState.NEEDS_INPUT, AttentionState.ERROR_SEEN):
+            self._set_attention_state(session, AttentionState.NONE)
 
     def resize_session(self, session_id: str, rows: int, cols: int) -> None:
         session = self._get(session_id)
@@ -169,10 +169,9 @@ class SessionManager:
                 else None
             )
             session.exit_code = exit_code
-            new_state = (
-                SessionState.DONE if exit_code == 0 else SessionState.ERROR
-            )
-            self._set_status(session, new_state)
+            if exit_code != 0:
+                self._set_attention_state(session, AttentionState.ERROR_SEEN)
+            self._set_process_state(session, ProcessState.EXITED)
             return
 
         text = data.decode("utf-8", errors="replace")
@@ -197,11 +196,11 @@ class SessionManager:
             if match is None:
                 continue
             if match.category == "error":
-                self._set_status(session, SessionState.ERROR, line.strip())
+                self._set_attention_state(session, AttentionState.ERROR_SEEN, line.strip())
             elif match.category == "prompt":
-                self._set_status(session, SessionState.WAITING, line.strip())
+                self._set_attention_state(session, AttentionState.NEEDS_INPUT, line.strip())
             elif match.category == "completion":
-                self._set_status(session, SessionState.DONE, line.strip())
+                self._set_process_state(session, ProcessState.EXITED, line.strip())
             # progress is informational — no status change
 
         # Some interactive CLIs print prompts without trailing newline.
@@ -209,7 +208,7 @@ class SessionManager:
         if partial:
             partial_match = session.pattern_matcher.scan(partial)
             if partial_match and partial_match.category == "prompt":
-                self._set_status(session, SessionState.WAITING, partial.strip())
+                self._set_attention_state(session, AttentionState.NEEDS_INPUT, partial.strip())
 
     # ------------------------------------------------------------------
     # Pane content scanning (for tmux restore)
@@ -247,11 +246,11 @@ class SessionManager:
         if last_match is None:
             return
         if last_match.category == "error":
-            self._set_status(session, SessionState.ERROR, last_match.line.strip())
+            self._set_attention_state(session, AttentionState.ERROR_SEEN, last_match.line.strip())
         elif last_match.category == "prompt":
-            self._set_status(session, SessionState.WAITING, last_match.line.strip())
+            self._set_attention_state(session, AttentionState.NEEDS_INPUT, last_match.line.strip())
         elif last_match.category == "completion":
-            self._set_status(session, SessionState.DONE, last_match.line.strip())
+            self._set_process_state(session, ProcessState.EXITED, last_match.line.strip())
 
     # ------------------------------------------------------------------
     # Event loop integration
@@ -289,12 +288,20 @@ class SessionManager:
         except KeyError:
             raise KeyError(f"No session with id {session_id!r}") from None
 
-    def _set_status(
-        self, session: Session, new_state: SessionState, matched_text: str = ""
+    def _set_process_state(
+        self, session: Session, new_ps: ProcessState, matched_text: str = ""
     ) -> None:
-        old_state = session.status
-        if old_state is new_state:
-            return
-        session.status = new_state
-        if self._on_status_change:
-            self._on_status_change(session.id, old_state, new_state, matched_text)
+        old_status = session.status
+        session.process_state = new_ps
+        new_status = session.status
+        if old_status is not new_status and self._on_status_change:
+            self._on_status_change(session.id, old_status, new_status, matched_text)
+
+    def _set_attention_state(
+        self, session: Session, new_as: AttentionState, matched_text: str = ""
+    ) -> None:
+        old_status = session.status
+        session.attention_state = new_as
+        new_status = session.status
+        if old_status is not new_status and self._on_status_change:
+            self._on_status_change(session.id, old_status, new_status, matched_text)

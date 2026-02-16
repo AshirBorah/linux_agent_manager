@@ -11,7 +11,7 @@ from tame.app import TAMEApp
 from tame.session.output_buffer import OutputBuffer
 from tame.session.pattern_matcher import PatternMatcher
 from tame.session.session import Session
-from tame.session.state import SessionState
+from tame.session.state import AttentionState, ProcessState, SessionState
 from tame.ui.widgets import (
     CommandPalette,
     HeaderBar,
@@ -44,7 +44,8 @@ def app(tmp_path, monkeypatch) -> TAMEApp:
             id=session_id,
             name=name,
             working_dir=working_dir,
-            status=SessionState.ACTIVE,
+            process_state=ProcessState.RUNNING,
+            attention_state=AttentionState.NONE,
             created_at=now,
             last_activity=now,
             output_buffer=output_buffer,
