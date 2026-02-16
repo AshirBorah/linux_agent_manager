@@ -25,5 +25,5 @@ class StatusBar(Static):
         """Update the stats display."""
         self.update(
             f"Sessions: {total} | Active: {active} | Waiting: {waiting} "
-            f"| Errors: {errors} | Ctrl+N New | Ctrl+Q Quit"
+            f"| Errors: {errors} | F2 New | F3/F4 Switch | F12 Quit"
         )

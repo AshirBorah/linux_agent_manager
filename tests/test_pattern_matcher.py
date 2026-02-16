@@ -8,7 +8,7 @@ PATTERNS: dict[str, list[str]] = {
         r"(?i)\bfatal\b[:\s]",
         r"Traceback \(most recent call last\)",
         r"(?i)APIError",
-        r"(?i)rate.?limit",
+        r"(?i)rate.?limit(?:ed|ing)?(?:\s+(?:exceeded|reached|hit)|\s*[:\-])",
     ],
     "prompt": [
         r"\[y/n\]",
@@ -97,6 +97,11 @@ def test_error_detection_rate_limit() -> None:
     m = _matcher().scan("rate limit exceeded, please wait")
     assert m is not None
     assert m.category == "error"
+
+
+def test_rate_limits_info_line_is_not_error() -> None:
+    m = _matcher().scan("Tip: New 2x rate limits until April 2nd.")
+    assert m is None
 
 
 # ── Completion detection ──────────────────────────────────────────

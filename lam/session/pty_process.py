@@ -6,7 +6,9 @@ import fcntl
 import os
 import pty
 import signal
+import struct
 import subprocess
+import termios
 from typing import Callable
 
 
@@ -27,6 +29,7 @@ class PTYProcess:
         shell: str = "/bin/bash",
         cwd: str = ".",
         env: dict[str, str] | None = None,
+        command: list[str] | None = None,
     ) -> None:
         master_fd, slave_fd = pty.openpty()
         self._master_fd = master_fd
@@ -35,9 +38,12 @@ class PTYProcess:
         spawn_env = os.environ.copy()
         if env:
             spawn_env.update(env)
+        spawn_env.setdefault("TERM", "xterm-256color")
+
+        process_args = command if command else [shell]
 
         self._process = subprocess.Popen(
-            [shell],
+            process_args,
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
@@ -97,6 +103,14 @@ class PTYProcess:
         if self._master_fd is None:
             raise RuntimeError("PTYProcess not started")
         os.write(self._master_fd, data.encode())
+
+    def resize(self, rows: int, cols: int) -> None:
+        if self._master_fd is None:
+            raise RuntimeError("PTYProcess not started")
+        winsize = struct.pack("HHHH", rows, cols, 0, 0)
+        fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, winsize)
+        if self._process and self.is_alive:
+            self.send_signal(signal.SIGWINCH)
 
     # ------------------------------------------------------------------
     # Signals

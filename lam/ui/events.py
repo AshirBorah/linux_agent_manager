@@ -62,11 +62,3 @@ class SidebarFlash(Message):
     def __init__(self, session_id: str) -> None:
         super().__init__()
         self.session_id = session_id
-
-
-class InputSubmitted(Message):
-    """User submitted text from the input area."""
-
-    def __init__(self, text: str) -> None:
-        super().__init__()
-        self.text = text

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from .header_bar import HeaderBar
-from .input_area import InputArea
-from .session_header import SessionHeader
+from .name_dialog import NameDialog
 from .session_list_item import SessionListItem
 from .session_sidebar import SessionSidebar
 from .session_viewer import SessionViewer
@@ -11,8 +10,7 @@ from .toast_overlay import ToastOverlay
 
 __all__ = [
     "HeaderBar",
-    "InputArea",
-    "SessionHeader",
+    "NameDialog",
     "SessionListItem",
     "SessionSidebar",
     "SessionViewer",

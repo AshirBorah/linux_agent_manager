@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from rich.text import Text
+from textual import events
 from textual.widgets import Static
 
 from lam.session.session import Session
@@ -17,15 +19,26 @@ STATUS_ICONS: dict[SessionState, str] = {
     SessionState.ERROR: "\u2717",
 }
 
+STATUS_STYLE: dict[SessionState, str] = {
+    SessionState.ACTIVE: "green",
+    SessionState.IDLE: "dim",
+    SessionState.WAITING: "yellow",
+    SessionState.ERROR: "red bold",
+    SessionState.DONE: "dim",
+    SessionState.PAUSED: "yellow",
+}
+
 
 class SessionListItem(Static):
     """A single session entry in the sidebar list."""
 
     DEFAULT_CSS = """
-    SessionListItem {
-        height: 3;
+    SessionListItem.session-item {
+        height: 1;
+        min-height: 1;
         padding: 0 1;
         content-align: left middle;
+        color: $text;
     }
 
     SessionListItem:hover {
@@ -36,59 +49,41 @@ class SessionListItem(Static):
         background: $accent;
         color: $text;
     }
-
-    SessionListItem.status-active {
-        color: $success;
-    }
-
-    SessionListItem.status-idle {
-        color: $text-muted;
-    }
-
-    SessionListItem.status-waiting {
-        color: $warning;
-    }
-
-    SessionListItem.status-error {
-        color: $error;
-    }
-
-    SessionListItem.status-done {
-        color: $text-disabled;
-    }
-
-    SessionListItem.status-paused {
-        color: $warning;
-    }
     """
 
     def __init__(self, session_id: str, name: str = "", status: SessionState = SessionState.CREATED) -> None:
-        super().__init__("", classes="session-item")
+        super().__init__(classes="session-item")
         self.session_id = session_id
         self._session_name = name
         self._status = status
-        self._render_content()
 
-    def _render_content(self) -> None:
+    def render(self) -> Text:
+        """Render session row text directly each paint for reliability."""
         icon = STATUS_ICONS.get(self._status, "?")
         label = self._status.value.upper()
-        self.update(f"{icon} {self._session_name}  [{label}]")
+        style = STATUS_STYLE.get(self._status, "")
+        name_style = self._name_style()
+        line = Text()
+        line.append(f"{icon} ", style=style)
+        line.append(self._session_name, style=name_style)
+        line.append(f"  {label}", style=style)
+        return line
 
-    def _set_status_class(self, state: SessionState) -> None:
-        """Remove old status-* classes, add the current one."""
-        for s in SessionState:
-            self.remove_class(f"status-{s.value}")
-        self.add_class(f"status-{state.value}")
+    def _name_style(self) -> str:
+        """Use explicit high-contrast session-name color for readability."""
+        try:
+            if self.app.dark:
+                return "bold #f5f5f5"
+            return "bold #1f1f1f"
+        except Exception:
+            return "bold"
 
     def update_from_session(self, session: Session) -> None:
         """Refresh display from a Session object."""
         self._session_name = session.name
         self._status = session.status
-        self._set_status_class(session.status)
-        self._render_content()
+        self.refresh()
 
-    def on_mount(self) -> None:
-        self._set_status_class(self._status)
-
-    def on_click(self) -> None:
+    def on_click(self, event: events.Click) -> None:
+        event.stop()
         self.post_message(SessionSelected(self.session_id))

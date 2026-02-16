@@ -55,7 +55,7 @@ def test_load_creates_default_file(tmp_path: object) -> None:
     assert config_file.exists()
     assert cfg["general"]["log_level"] == "INFO"
     assert cfg["sessions"]["idle_threshold_seconds"] == 300
-    assert cfg["keybindings"]["quit"] == "ctrl+q"
+    assert cfg["keybindings"]["quit"] == "f12"
 
 
 def test_load_merges_user_config(tmp_path: object) -> None:
@@ -84,4 +84,4 @@ def test_load_merges_user_config(tmp_path: object) -> None:
     assert cfg["general"]["state_file"] == "~/.local/share/lam/state.db"
     assert cfg["sessions"]["idle_threshold_seconds"] == 300
     assert "keybindings" in cfg
-    assert cfg["keybindings"]["quit"] == "ctrl+q"
+    assert cfg["keybindings"]["quit"] == "f12"

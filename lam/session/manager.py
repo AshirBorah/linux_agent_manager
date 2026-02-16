@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Callable
@@ -20,7 +21,7 @@ DEFAULT_PATTERNS: dict[str, list[str]] = {
         r"(?i)\bfatal\b[:\s]",
         r"Traceback \(most recent call last\)",
         r"(?i)APIError",
-        r"(?i)rate.?limit",
+        r"(?i)rate.?limit(?:ed|ing)?(?:\s+(?:exceeded|reached|hit)|\s*[:\-])",
     ],
     "prompt": [
         r"\[y/n\]",
@@ -42,6 +43,10 @@ DEFAULT_PATTERNS: dict[str, list[str]] = {
 
 StatusChangeCallback = Callable[[str, SessionState, SessionState], None]
 OutputCallback = Callable[[str, str], None]  # session_id, text
+
+ANSI_ESCAPE_RE = re.compile(
+    r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x1B\x07]*(?:\x07|\x1B\\))"
+)
 
 
 class SessionManager:
@@ -66,12 +71,13 @@ class SessionManager:
         name: str,
         working_dir: str,
         shell: str | None = None,
+        command: list[str] | None = None,
     ) -> Session:
         shell = shell or os.environ.get("SHELL", "/bin/bash")
         session_id = uuid.uuid4().hex
 
         pty_proc = PTYProcess()
-        pty_proc.start(shell=shell, cwd=working_dir)
+        pty_proc.start(shell=shell, cwd=working_dir, command=command)
 
         now = datetime.now(timezone.utc)
         session = Session(
@@ -153,8 +159,13 @@ class SessionManager:
         if session.pty_process is None:
             raise RuntimeError(f"Session {session_id} has no PTY process")
         session.pty_process.write(text)
-        session.input_history.append(text)
         session.last_activity = datetime.now(timezone.utc)
+
+    def resize_session(self, session_id: str, rows: int, cols: int) -> None:
+        session = self._get(session_id)
+        if session.pty_process is None:
+            raise RuntimeError(f"Session {session_id} has no PTY process")
+        session.pty_process.resize(rows, cols)
 
     def _on_session_output(self, session_id: str, data: bytes) -> None:
         session = self._sessions.get(session_id)
@@ -183,7 +194,8 @@ class SessionManager:
             self._on_output(session_id, text)
 
         # Run pattern matcher on each new complete line.
-        lines = text.split("\n")
+        cleaned = ANSI_ESCAPE_RE.sub("", text)
+        lines = cleaned.split("\n")
         for line in lines:
             if not line:
                 continue
