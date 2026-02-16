@@ -28,6 +28,11 @@ STATUS_STYLE: dict[SessionState, str] = {
     SessionState.PAUSED: "yellow",
 }
 
+ATTENTION_BADGE: dict[SessionState, tuple[str, str]] = {
+    SessionState.WAITING: (" \u25cf", "bold yellow"),
+    SessionState.ERROR: (" !", "bold red"),
+}
+
 
 class SessionListItem(Static):
     """A single session entry in the sidebar list."""
@@ -67,6 +72,9 @@ class SessionListItem(Static):
         line.append(f"{icon} ", style=style)
         line.append(self._session_name, style=name_style)
         line.append(f"  {label}", style=style)
+        badge = ATTENTION_BADGE.get(self._status)
+        if badge:
+            line.append(badge[0], style=badge[1])
         return line
 
     def _name_style(self) -> str:

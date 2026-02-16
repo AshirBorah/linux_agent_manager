@@ -9,7 +9,7 @@ from tame.session.output_buffer import OutputBuffer
 from tame.session.pattern_matcher import PatternMatcher
 from tame.session.session import Session
 from tame.session.state import AttentionState, ProcessState, SessionState
-from tame.ui.widgets.session_list_item import SessionListItem
+from tame.ui.widgets.session_list_item import ATTENTION_BADGE, SessionListItem
 
 
 @pytest.fixture
@@ -60,3 +60,30 @@ async def test_session_list_item_renders_name_and_status(app: TAMEApp) -> None:
         rendered = item.render()
         assert "session-visible" in rendered.plain
         assert "ACTIVE" in rendered.plain
+
+
+def test_waiting_status_shows_attention_badge() -> None:
+    item = SessionListItem(session_id="s1", name="test", status=SessionState.WAITING)
+    rendered = item.render()
+    badge_char = ATTENTION_BADGE[SessionState.WAITING][0].strip()
+    assert badge_char in rendered.plain
+
+
+def test_error_status_shows_attention_badge() -> None:
+    item = SessionListItem(session_id="s2", name="test", status=SessionState.ERROR)
+    rendered = item.render()
+    badge_char = ATTENTION_BADGE[SessionState.ERROR][0].strip()
+    assert badge_char in rendered.plain
+
+
+def test_active_status_has_no_attention_badge() -> None:
+    item = SessionListItem(session_id="s3", name="test", status=SessionState.ACTIVE)
+    rendered = item.render()
+    # The rendered text should end with the status label, no trailing badge
+    assert rendered.plain.rstrip().endswith("ACTIVE")
+
+
+def test_idle_status_has_no_attention_badge() -> None:
+    item = SessionListItem(session_id="s4", name="test", status=SessionState.IDLE)
+    rendered = item.render()
+    assert rendered.plain.rstrip().endswith("IDLE")
