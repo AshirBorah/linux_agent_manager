@@ -29,6 +29,7 @@ from tame.ui.widgets import (
     CommandPalette,
     ConfirmDialog,
     HeaderBar,
+    HistoryPicker,
     NameDialog,
     SessionSidebar,
     SessionViewer,
@@ -114,6 +115,7 @@ class TAMEApp(App):
     COMMAND_MODE_MAP: dict[str, str] = {
         "c": "new_session",
         "d": "delete_session",
+        "h": "show_history",
         "m": "rename_session",
         "n": "next_session",
         "p": "prev_session",
@@ -256,6 +258,9 @@ class TAMEApp(App):
         self._output_pending: dict[str, list[str]] = {}
         self._output_flush_timer: object | None = None  # Timer handle
         self._app_focused: bool = True
+
+        # Input history: accumulate typed chars per session, flush on Enter
+        self._input_line_buffer: dict[str, list[str]] = {}
 
     def _get_patterns_from_config(self, cfg: dict) -> dict[str, list[str]]:
         patterns_cfg = cfg.get("patterns", {})
@@ -421,6 +426,26 @@ class TAMEApp(App):
         pty_input = self._key_to_pty_input(event)
         if pty_input is None or self._active_session_id is None:
             return
+
+        # --- Input history tracking ---
+        sid = self._active_session_id
+        if pty_input == "\r":
+            # Enter: flush accumulated chars as a history entry
+            buf = self._input_line_buffer.pop(sid, [])
+            if buf:
+                line = "".join(buf).strip()
+                if line:
+                    self._record_input_history(sid, line)
+        elif pty_input == "\x7f":
+            # Backspace: pop last char from buffer
+            buf = self._input_line_buffer.get(sid, [])
+            if buf:
+                buf.pop()
+        elif pty_input == "\x03":
+            # Ctrl+C: discard current input
+            self._input_line_buffer.pop(sid, None)
+        elif len(pty_input) == 1 and pty_input.isprintable():
+            self._input_line_buffer.setdefault(sid, []).append(pty_input)
 
         self._session_manager.send_input(self._active_session_id, pty_input)
         event.stop()
@@ -601,6 +626,35 @@ class TAMEApp(App):
                 )
                 session.metadata["tmux_session_name"] = new_tmux
         log.info("Renamed session %s to '%s'", session_id, new_name)
+
+    def _record_input_history(self, session_id: str, line: str) -> None:
+        """Save a line to the session's input history (deduplicated at head)."""
+        try:
+            session = self._session_manager.get_session(session_id)
+        except KeyError:
+            return
+        # Avoid consecutive duplicates
+        if session.input_history and session.input_history[-1] == line:
+            return
+        session.input_history.append(line)
+        # Cap history at 500 entries
+        if len(session.input_history) > 500:
+            session.input_history[:] = session.input_history[-500:]
+
+    def action_show_history(self) -> None:
+        """Open a picker showing cross-session input history."""
+        # Gather history from all sessions, most recent last
+        all_entries: list[str] = []
+        for session in self._session_manager.list_sessions():
+            all_entries.extend(session.input_history)
+        self.push_screen(HistoryPicker(all_entries), callback=self._handle_history_pick)
+
+    def _handle_history_pick(self, command: str | None) -> None:
+        if command is None or self._active_session_id is None:
+            return
+        # Send the selected command to the active session (with Enter)
+        self._session_manager.send_input(self._active_session_id, command + "\r")
+        self._record_input_history(self._active_session_id, command)
 
     def action_check_usage(self) -> None:
         """Send a usage command to the active session to trigger usage parsing."""

@@ -9,6 +9,7 @@ from textual.widgets import Label
 COMMAND_ENTRIES: list[tuple[str, str, str]] = [
     ("c", "new_session", "New Session"),
     ("d", "delete_session", "Delete Session"),
+    ("h", "show_history", "Input History"),
     ("m", "rename_session", "Rename Session"),
     ("n", "next_session", "Next Session"),
     ("p", "prev_session", "Previous Session"),
