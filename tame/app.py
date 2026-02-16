@@ -115,7 +115,7 @@ class TAMEApp(App):
         "c": "new_session",
         "n": "next_session",
         "p": "prev_session",
-        "k": "kill_session",
+        "d": "delete_session",
         "s": "toggle_sidebar",
         "r": "resume_all",
         "z": "pause_all",
@@ -126,26 +126,34 @@ class TAMEApp(App):
     }
 
     # Configurable keybindings — mapped action → (description, show, priority).
+    # The action name must match an action_<name>() method on the class.
     _BINDING_META: dict[str, tuple[str, bool, bool]] = {
         "new_session": ("New Session", True, False),
+        "delete_session": ("Delete Session", False, False),
+        "rename_session": ("Rename Session", False, False),
         "prev_session": ("Prev Session", True, False),
         "next_session": ("Next Session", True, False),
         "toggle_sidebar": ("Toggle Sidebar", True, False),
+        "focus_search": ("Focus Search", False, True),
+        "focus_input": ("Focus Input", False, True),
+        "toggle_theme": ("Cycle Theme", False, False),
         "resume_all": ("Resume All", False, False),
         "pause_all": ("Pause All", False, False),
         "quit": ("Quit", True, False),
+        "session_1": ("Session 1", False, False),
+        "session_2": ("Session 2", False, False),
+        "session_3": ("Session 3", False, False),
+        "session_4": ("Session 4", False, False),
+        "session_5": ("Session 5", False, False),
+        "session_6": ("Session 6", False, False),
+        "session_7": ("Session 7", False, False),
+        "session_8": ("Session 8", False, False),
+        "session_9": ("Session 9", False, False),
     }
 
     # Hardcoded bindings that are not user-configurable.
     BINDINGS = [
         Binding("tab", "send_tab", "Tab Complete", show=False, priority=True),
-        Binding(
-            "shift+tab",
-            "focus_search",
-            "Focus Search",
-            show=False,
-            priority=True,
-        ),
     ]
 
     def __init__(
@@ -174,10 +182,12 @@ class TAMEApp(App):
         self._keybind_manager = KeybindManager(cfg.get("keybindings"))
 
         # Wire configurable bindings from KeybindManager
-        for action, (desc, show, _priority) in self._BINDING_META.items():
+        for action, (desc, show, priority) in self._BINDING_META.items():
             key = self._keybind_manager.get_key(action)
             if key:
-                self.bind(key, action, description=desc, show=show)
+                self._bindings.bind(
+                    key, action, description=desc, show=show, priority=priority,
+                )
 
         for conflict in self._keybind_manager.conflicts:
             log.warning("Keybinding conflict: %s", conflict)
@@ -477,7 +487,7 @@ class TAMEApp(App):
     def action_pause_all(self) -> None:
         self._session_manager.pause_all()
 
-    def action_cycle_theme(self) -> None:
+    def action_toggle_theme(self) -> None:
         new_theme = self._theme_manager.cycle()
         css_path = self._theme_manager.get_css_path()
         if css_path:
@@ -490,7 +500,7 @@ class TAMEApp(App):
             self.stylesheet.update(self)
         log.info("Switched theme to '%s'", new_theme)
 
-    def action_kill_session(self) -> None:
+    def action_delete_session(self) -> None:
         if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
             return
         if self._active_session_id is None:
@@ -622,6 +632,47 @@ class TAMEApp(App):
         sidebar = self.query_one(SessionSidebar)
         search_input = sidebar.query_one("#session-search", Input)
         search_input.focus()
+
+    def action_focus_input(self) -> None:
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
+            return
+        try:
+            self.query_one(SessionViewer).focus()
+        except Exception:
+            pass
+
+    def _select_session_by_index(self, index: int) -> None:
+        """Select the Nth session (0-based) from the session list."""
+        sessions = self._session_manager.list_sessions()
+        if index < len(sessions):
+            self._select_session(sessions[index].id)
+
+    def action_session_1(self) -> None:
+        self._select_session_by_index(0)
+
+    def action_session_2(self) -> None:
+        self._select_session_by_index(1)
+
+    def action_session_3(self) -> None:
+        self._select_session_by_index(2)
+
+    def action_session_4(self) -> None:
+        self._select_session_by_index(3)
+
+    def action_session_5(self) -> None:
+        self._select_session_by_index(4)
+
+    def action_session_6(self) -> None:
+        self._select_session_by_index(5)
+
+    def action_session_7(self) -> None:
+        self._select_session_by_index(6)
+
+    def action_session_8(self) -> None:
+        self._select_session_by_index(7)
+
+    def action_session_9(self) -> None:
+        self._select_session_by_index(8)
 
     # ------------------------------------------------------------------
     # Session selection
