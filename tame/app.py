@@ -435,6 +435,14 @@ class TAMEApp(App):
     def action_pause_all(self) -> None:
         self._session_manager.pause_all()
 
+    def action_cycle_theme(self) -> None:
+        new_theme = self._theme_manager.cycle()
+        css_path = self._theme_manager.get_css_path()
+        if css_path:
+            self.stylesheet = css_path.read_text()
+            self.refresh_css()
+        log.info("Switched theme to '%s'", new_theme)
+
     def action_kill_session(self) -> None:
         if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
             return

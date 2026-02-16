@@ -1,0 +1,110 @@
+/* TAME Nord Theme */
+
+Screen {
+    background: #2e3440;
+    color: #d8dee9;
+}
+
+#header-bar {
+    dock: top;
+    height: 1;
+    background: #5e81ac;
+    color: #eceff4;
+    padding: 0 1;
+}
+
+#sidebar {
+    width: 28;
+    background: #3b4252;
+    border-right: solid #4c566a;
+}
+
+#sidebar-search {
+    margin: 0 1;
+    height: 1;
+}
+
+#session-list {
+    background: #3b4252;
+}
+
+.session-item {
+    padding: 0 1;
+    height: 1;
+}
+
+.session-item:hover {
+    background: #434c5e;
+}
+
+.session-item.--highlight {
+    background: #434c5e;
+}
+
+.session-item.status-active {
+    color: #a3be8c;
+}
+
+.session-item.status-idle {
+    color: #4c566a;
+}
+
+.session-item.status-waiting {
+    color: #ebcb8b;
+}
+
+.session-item.status-error {
+    color: #bf616a;
+}
+
+.session-item.status-done {
+    color: #a3be8c;
+}
+
+.session-item.status-paused {
+    color: #4c566a;
+}
+
+#new-session-btn {
+    margin: 0 1;
+    height: 1;
+    background: #4c566a;
+    color: #d8dee9;
+}
+
+#main-panel {
+    background: #2e3440;
+}
+
+#session-header {
+    height: 2;
+    background: #3b4252;
+    padding: 0 1;
+    color: #4c566a;
+    border-bottom: solid #4c566a;
+}
+
+#session-viewer {
+    background: #2e3440;
+    color: #d8dee9;
+}
+
+#input-area {
+    dock: bottom;
+    height: 3;
+    background: #3b4252;
+    border-top: solid #4c566a;
+    padding: 0 1;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: #5e81ac;
+    color: #eceff4;
+    padding: 0 1;
+}
+
+#toast-overlay {
+    layer: overlay;
+}

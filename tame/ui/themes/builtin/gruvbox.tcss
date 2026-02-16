@@ -1,0 +1,110 @@
+/* TAME Gruvbox Theme */
+
+Screen {
+    background: #282828;
+    color: #ebdbb2;
+}
+
+#header-bar {
+    dock: top;
+    height: 1;
+    background: #458588;
+    color: #ebdbb2;
+    padding: 0 1;
+}
+
+#sidebar {
+    width: 28;
+    background: #1d2021;
+    border-right: solid #3c3836;
+}
+
+#sidebar-search {
+    margin: 0 1;
+    height: 1;
+}
+
+#session-list {
+    background: #1d2021;
+}
+
+.session-item {
+    padding: 0 1;
+    height: 1;
+}
+
+.session-item:hover {
+    background: #3c3836;
+}
+
+.session-item.--highlight {
+    background: #504945;
+}
+
+.session-item.status-active {
+    color: #b8bb26;
+}
+
+.session-item.status-idle {
+    color: #928374;
+}
+
+.session-item.status-waiting {
+    color: #fabd2f;
+}
+
+.session-item.status-error {
+    color: #fb4934;
+}
+
+.session-item.status-done {
+    color: #b8bb26;
+}
+
+.session-item.status-paused {
+    color: #928374;
+}
+
+#new-session-btn {
+    margin: 0 1;
+    height: 1;
+    background: #3c3836;
+    color: #ebdbb2;
+}
+
+#main-panel {
+    background: #282828;
+}
+
+#session-header {
+    height: 2;
+    background: #1d2021;
+    padding: 0 1;
+    color: #928374;
+    border-bottom: solid #3c3836;
+}
+
+#session-viewer {
+    background: #282828;
+    color: #ebdbb2;
+}
+
+#input-area {
+    dock: bottom;
+    height: 3;
+    background: #1d2021;
+    border-top: solid #3c3836;
+    padding: 0 1;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: #458588;
+    color: #ebdbb2;
+    padding: 0 1;
+}
+
+#toast-overlay {
+    layer: overlay;
+}

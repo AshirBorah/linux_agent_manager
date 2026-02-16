@@ -1,0 +1,110 @@
+/* TAME Solarized Dark Theme */
+
+Screen {
+    background: #002b36;
+    color: #839496;
+}
+
+#header-bar {
+    dock: top;
+    height: 1;
+    background: #268bd2;
+    color: #fdf6e3;
+    padding: 0 1;
+}
+
+#sidebar {
+    width: 28;
+    background: #073642;
+    border-right: solid #586e75;
+}
+
+#sidebar-search {
+    margin: 0 1;
+    height: 1;
+}
+
+#session-list {
+    background: #073642;
+}
+
+.session-item {
+    padding: 0 1;
+    height: 1;
+}
+
+.session-item:hover {
+    background: #073642;
+}
+
+.session-item.--highlight {
+    background: #586e75;
+}
+
+.session-item.status-active {
+    color: #859900;
+}
+
+.session-item.status-idle {
+    color: #586e75;
+}
+
+.session-item.status-waiting {
+    color: #b58900;
+}
+
+.session-item.status-error {
+    color: #dc322f;
+}
+
+.session-item.status-done {
+    color: #859900;
+}
+
+.session-item.status-paused {
+    color: #586e75;
+}
+
+#new-session-btn {
+    margin: 0 1;
+    height: 1;
+    background: #073642;
+    color: #839496;
+}
+
+#main-panel {
+    background: #002b36;
+}
+
+#session-header {
+    height: 2;
+    background: #073642;
+    padding: 0 1;
+    color: #586e75;
+    border-bottom: solid #586e75;
+}
+
+#session-viewer {
+    background: #002b36;
+    color: #839496;
+}
+
+#input-area {
+    dock: bottom;
+    height: 3;
+    background: #073642;
+    border-top: solid #586e75;
+    padding: 0 1;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: #268bd2;
+    color: #fdf6e3;
+    padding: 0 1;
+}
+
+#toast-overlay {
+    layer: overlay;
+}

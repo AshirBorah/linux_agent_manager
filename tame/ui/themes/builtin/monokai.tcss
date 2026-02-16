@@ -1,0 +1,110 @@
+/* TAME Monokai Theme */
+
+Screen {
+    background: #272822;
+    color: #f8f8f2;
+}
+
+#header-bar {
+    dock: top;
+    height: 1;
+    background: #75715e;
+    color: #f8f8f2;
+    padding: 0 1;
+}
+
+#sidebar {
+    width: 28;
+    background: #1e1f1c;
+    border-right: solid #3e3d32;
+}
+
+#sidebar-search {
+    margin: 0 1;
+    height: 1;
+}
+
+#session-list {
+    background: #1e1f1c;
+}
+
+.session-item {
+    padding: 0 1;
+    height: 1;
+}
+
+.session-item:hover {
+    background: #3e3d32;
+}
+
+.session-item.--highlight {
+    background: #49483e;
+}
+
+.session-item.status-active {
+    color: #a6e22e;
+}
+
+.session-item.status-idle {
+    color: #75715e;
+}
+
+.session-item.status-waiting {
+    color: #e6db74;
+}
+
+.session-item.status-error {
+    color: #f92672;
+}
+
+.session-item.status-done {
+    color: #a6e22e;
+}
+
+.session-item.status-paused {
+    color: #75715e;
+}
+
+#new-session-btn {
+    margin: 0 1;
+    height: 1;
+    background: #3e3d32;
+    color: #f8f8f2;
+}
+
+#main-panel {
+    background: #272822;
+}
+
+#session-header {
+    height: 2;
+    background: #1e1f1c;
+    padding: 0 1;
+    color: #75715e;
+    border-bottom: solid #3e3d32;
+}
+
+#session-viewer {
+    background: #272822;
+    color: #f8f8f2;
+}
+
+#input-area {
+    dock: bottom;
+    height: 3;
+    background: #1e1f1c;
+    border-top: solid #3e3d32;
+    padding: 0 1;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: #66d9ef;
+    color: #272822;
+    padding: 0 1;
+}
+
+#toast-overlay {
+    layer: overlay;
+}

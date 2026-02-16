@@ -14,6 +14,7 @@ COMMAND_ENTRIES: list[tuple[str, str, str]] = [
     ("s", "toggle_sidebar", "Toggle Sidebar"),
     ("r", "resume_all", "Resume All"),
     ("z", "pause_all", "Pause All"),
+    ("t", "cycle_theme", "Cycle Theme"),
     ("x", "clear_notifications", "Clear Notifications"),
     ("q", "quit", "Quit"),
 ]
