@@ -210,6 +210,14 @@ def test_send_input_does_not_reset_paused() -> None:
     assert transitions == []
 
 
+def test_rename_session() -> None:
+    mgr = SessionManager()
+    session = mgr.create_session("old-name", "/tmp")
+    mgr.rename_session(session.id, "new-name")
+    assert mgr.get_session(session.id).name == "new-name"
+    mgr.close_all()
+
+
 def test_send_input_noop_when_already_active() -> None:
     manager, session, transitions = _make_manager_with_pty_session(SessionState.ACTIVE)
 
