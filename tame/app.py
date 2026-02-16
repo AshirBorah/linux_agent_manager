@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import datetime
 
 from textual import events
 from textual.app import App, ComposeResult
@@ -114,6 +115,7 @@ class TAMEApp(App):
     COMMAND_MODE_MAP: dict[str, str] = {
         "c": "new_session",
         "d": "delete_session",
+        "e": "export_session",
         "m": "rename_session",
         "n": "next_session",
         "p": "prev_session",
@@ -602,6 +604,43 @@ class TAMEApp(App):
                 )
                 session.metadata["tmux_session_name"] = new_tmux
         log.info("Renamed session %s to '%s'", session_id, new_name)
+
+    def action_export_session(self) -> None:
+        """Export the active session's output buffer to a text file."""
+        if self._active_session_id is None:
+            return
+        try:
+            session = self._session_manager.get_session(self._active_session_id)
+        except KeyError:
+            return
+        text = session.output_buffer.get_all_text()
+        if not text:
+            try:
+                toast = self.query_one(ToastOverlay)
+                toast.show_toast(title="Export", message="No output to export")
+            except Exception:
+                pass
+            return
+        safe_name = re.sub(r"[^A-Za-z0-9_-]", "_", session.name).strip("_") or "session"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{safe_name}_{timestamp}.txt"
+        export_dir = os.path.expanduser("~/.local/share/tame/exports")
+        os.makedirs(export_dir, exist_ok=True)
+        filepath = os.path.join(export_dir, filename)
+        # Strip ANSI escape sequences for clean text export
+        clean_text = re.sub(
+            r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x1B\x07]*(?:\x07|\x1B\\))",
+            "",
+            text,
+        )
+        with open(filepath, "w") as f:
+            f.write(clean_text)
+        try:
+            toast = self.query_one(ToastOverlay)
+            toast.show_toast(title="Export", message=f"Saved to {filepath}")
+        except Exception:
+            pass
+        log.info("Exported session '%s' to %s", session.name, filepath)
 
     def action_check_usage(self) -> None:
         """Send a usage command to the active session to trigger usage parsing."""
