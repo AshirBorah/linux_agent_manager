@@ -9,10 +9,14 @@ from tame.session.session import Session
 from tame.session.state import AttentionState, ProcessState, SessionState
 
 
-def _make_manager_with_session() -> tuple[SessionManager, Session, list[tuple[SessionState, SessionState]]]:
+def _make_manager_with_session() -> tuple[
+    SessionManager, Session, list[tuple[SessionState, SessionState]]
+]:
     transitions: list[tuple[SessionState, SessionState]] = []
 
-    def on_status(_sid: str, old: SessionState, new: SessionState, _matched: str = "") -> None:
+    def on_status(
+        _sid: str, old: SessionState, new: SessionState, _matched: str = ""
+    ) -> None:
         transitions.append((old, new))
 
     manager = SessionManager(on_status_change=on_status)
@@ -68,9 +72,7 @@ def test_scan_pane_content_detects_prompt() -> None:
     manager, session, transitions = _make_manager_with_session()
 
     pane_text = (
-        "Some output line\n"
-        "Another line of output\n"
-        "Do you want to proceed? [y/n]\n"
+        "Some output line\nAnother line of output\nDo you want to proceed? [y/n]\n"
     )
     manager.scan_pane_content(session.id, pane_text)
     assert session.status is SessionState.WAITING
@@ -81,9 +83,7 @@ def test_scan_pane_content_detects_error() -> None:
     manager, session, transitions = _make_manager_with_session()
 
     pane_text = (
-        "Starting task...\n"
-        "Traceback (most recent call last)\n"
-        "  File 'foo.py', line 1\n"
+        "Starting task...\nTraceback (most recent call last)\n  File 'foo.py', line 1\n"
     )
     manager.scan_pane_content(session.id, pane_text)
     assert session.status is SessionState.ERROR
@@ -102,11 +102,7 @@ def test_scan_pane_content_detects_completion() -> None:
 def test_scan_pane_content_last_match_wins() -> None:
     manager, session, transitions = _make_manager_with_session()
 
-    pane_text = (
-        "Error: something went wrong\n"
-        "Recovered\n"
-        "Continue? [y/n]\n"
-    )
+    pane_text = "Error: something went wrong\nRecovered\nContinue? [y/n]\n"
     manager.scan_pane_content(session.id, pane_text)
     assert session.status is SessionState.WAITING
 
@@ -159,7 +155,9 @@ def _make_manager_with_pty_session(
 ) -> tuple[SessionManager, Session, list[tuple[SessionState, SessionState]]]:
     transitions: list[tuple[SessionState, SessionState]] = []
 
-    def on_status(_sid: str, old: SessionState, new: SessionState, _matched: str = "") -> None:
+    def on_status(
+        _sid: str, old: SessionState, new: SessionState, _matched: str = ""
+    ) -> None:
         transitions.append((old, new))
 
     manager = SessionManager(on_status_change=on_status)

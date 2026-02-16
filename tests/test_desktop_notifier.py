@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from tame.notifications.desktop import DesktopNotifier
 from tame.notifications.models import EventType, NotificationEvent, Priority

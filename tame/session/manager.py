@@ -12,19 +12,28 @@ from tame.config.defaults import get_default_patterns_flat
 from .output_buffer import OutputBuffer
 from .pattern_matcher import PatternMatcher, PatternMatch
 from .pty_process import PTYProcess
-from .session import Session, UsageInfo
+from .session import Session
 from .state import AttentionState, ProcessState, SessionState
 
 # Built-in usage patterns for common AI CLIs
 _USAGE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Claude Code: "Opus messages: 42/100 remaining"
-    ("messages_used", re.compile(r"(\w+)\s+messages?:\s*(\d+)/(\d+)\s*remaining", re.IGNORECASE)),
+    (
+        "messages_used",
+        re.compile(r"(\w+)\s+messages?:\s*(\d+)/(\d+)\s*remaining", re.IGNORECASE),
+    ),
     # Generic token count: "Tokens used: 12345" or "tokens: 12,345"
     ("tokens_used", re.compile(r"tokens?\s*(?:used)?:\s*([\d,]+)", re.IGNORECASE)),
     # Model name: "Model: claude-3-opus" or "Using model: gpt-4"
     ("model_name", re.compile(r"(?:using\s+)?model:\s*(\S+)", re.IGNORECASE)),
     # Reset/refresh time: "Resets in 2h 30m" or "Refresh: 3:00 PM"
-    ("refresh_time", re.compile(r"(?:resets?\s+in|refresh(?:es)?(?:\s+(?:at|in))?)\s*:?\s*(.+)", re.IGNORECASE)),
+    (
+        "refresh_time",
+        re.compile(
+            r"(?:resets?\s+in|refresh(?:es)?(?:\s+(?:at|in))?)\s*:?\s*(.+)",
+            re.IGNORECASE,
+        ),
+    ),
 ]
 
 StatusChangeCallback = Callable[[str, SessionState, SessionState, str], None]
@@ -97,10 +106,11 @@ class SessionManager:
         self._sessions[session_id] = session
 
         if self._loop:
-            pty_proc.attach_to_loop(
-                self._loop,
-                lambda data, sid=session_id: self._on_session_output(sid, data),
-            )
+
+            def _on_output(data: bytes, sid: str = session_id) -> None:
+                self._on_session_output(sid, data)
+
+            pty_proc.attach_to_loop(self._loop, _on_output)
 
         return session
 
@@ -192,11 +202,7 @@ class SessionManager:
         if not data:
             # EOF — process exited.
             self._scan_partials.pop(session_id, None)
-            exit_code = (
-                session.pty_process.exit_code
-                if session.pty_process
-                else None
-            )
+            exit_code = session.pty_process.exit_code if session.pty_process else None
             session.exit_code = exit_code
             if exit_code != 0:
                 self._set_attention_state(session, AttentionState.ERROR_SEEN)
@@ -232,9 +238,13 @@ class SessionManager:
             if match is None:
                 continue
             if match.category == "error":
-                self._set_attention_state(session, AttentionState.ERROR_SEEN, line.strip())
+                self._set_attention_state(
+                    session, AttentionState.ERROR_SEEN, line.strip()
+                )
             elif match.category == "prompt":
-                self._set_attention_state(session, AttentionState.NEEDS_INPUT, line.strip())
+                self._set_attention_state(
+                    session, AttentionState.NEEDS_INPUT, line.strip()
+                )
             elif match.category == "weak_prompt":
                 self._schedule_weak_prompt(session_id, line.strip())
             elif match.category == "completion":
@@ -248,7 +258,9 @@ class SessionManager:
             self._last_scanned_partial[session_id] = partial
             partial_match = session.pattern_matcher.scan(partial)
             if partial_match and partial_match.category == "prompt":
-                self._set_attention_state(session, AttentionState.NEEDS_INPUT, partial.strip())
+                self._set_attention_state(
+                    session, AttentionState.NEEDS_INPUT, partial.strip()
+                )
             elif partial_match and partial_match.category == "weak_prompt":
                 self._schedule_weak_prompt(session_id, partial.strip())
 
@@ -298,7 +310,9 @@ class SessionManager:
             # No event loop — fire immediately (unit-test fallback)
             session = self._sessions.get(session_id)
             if session:
-                self._set_attention_state(session, AttentionState.NEEDS_INPUT, matched_line)
+                self._set_attention_state(
+                    session, AttentionState.NEEDS_INPUT, matched_line
+                )
             return
         handle = self._loop.call_later(
             self._idle_prompt_timeout,
@@ -363,11 +377,17 @@ class SessionManager:
         if last_match is None:
             return
         if last_match.category == "error":
-            self._set_attention_state(session, AttentionState.ERROR_SEEN, last_match.line.strip())
+            self._set_attention_state(
+                session, AttentionState.ERROR_SEEN, last_match.line.strip()
+            )
         elif last_match.category == "prompt":
-            self._set_attention_state(session, AttentionState.NEEDS_INPUT, last_match.line.strip())
+            self._set_attention_state(
+                session, AttentionState.NEEDS_INPUT, last_match.line.strip()
+            )
         elif last_match.category == "completion":
-            self._set_process_state(session, ProcessState.EXITED, last_match.line.strip())
+            self._set_process_state(
+                session, ProcessState.EXITED, last_match.line.strip()
+            )
 
     # ------------------------------------------------------------------
     # Event loop integration
@@ -377,12 +397,11 @@ class SessionManager:
         self._loop = loop
         for session_id, session in self._sessions.items():
             if session.pty_process and session.pty_process.is_alive:
-                session.pty_process.attach_to_loop(
-                    loop,
-                    lambda data, sid=session_id: self._on_session_output(
-                        sid, data
-                    ),
-                )
+
+                def _on_output(data: bytes, sid: str = session_id) -> None:
+                    self._on_session_output(sid, data)
+
+                session.pty_process.attach_to_loop(loop, _on_output)
 
     # ------------------------------------------------------------------
     # Idle detection (#6)

@@ -46,7 +46,9 @@ def app(tmp_path, monkeypatch) -> TAMEApp:
 
     monkeypatch.setattr(app._session_manager, "create_session", _fake_create_session)
     monkeypatch.setattr(app._session_manager, "send_input", lambda _sid, _text: None)
-    monkeypatch.setattr(app._session_manager, "resize_session", lambda _sid, _rows, _cols: None)
+    monkeypatch.setattr(
+        app._session_manager, "resize_session", lambda _sid, _rows, _cols: None
+    )
     monkeypatch.setattr(app, "_list_existing_tmux_sessions", lambda: [])
     return app
 

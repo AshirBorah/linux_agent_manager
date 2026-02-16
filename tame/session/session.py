@@ -13,6 +13,7 @@ from .state import AttentionState, ProcessState, SessionState, compute_session_s
 @dataclass
 class UsageInfo:
     """Parsed AI model usage data for a session."""
+
     model_name: str = ""
     messages_used: int | None = None
     tokens_used: int | None = None
@@ -23,9 +24,9 @@ class UsageInfo:
 
 @dataclass
 class Session:
-    id: str                            # UUID
-    name: str                          # User-editable display name
-    working_dir: str                   # CWD for the shell
+    id: str  # UUID
+    name: str  # User-editable display name
+    working_dir: str  # CWD for the shell
     process_state: ProcessState
     attention_state: AttentionState
     created_at: datetime

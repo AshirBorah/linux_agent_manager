@@ -5,6 +5,7 @@ from enum import Enum
 
 class ProcessState(Enum):
     """Lifecycle state of the underlying process."""
+
     STARTING = "starting"
     RUNNING = "running"
     PAUSED = "paused"
@@ -13,6 +14,7 @@ class ProcessState(Enum):
 
 class AttentionState(Enum):
     """Whether the session needs user attention."""
+
     NONE = "none"
     NEEDS_INPUT = "needs_input"
     ERROR_SEEN = "error_seen"
@@ -21,14 +23,15 @@ class AttentionState(Enum):
 
 class SessionState(Enum):
     """Combined display state derived from ProcessState + AttentionState."""
+
     CREATED = "created"
     STARTING = "starting"
     ACTIVE = "active"
     IDLE = "idle"
-    WAITING = "waiting"      # Agent needs input
-    PAUSED = "paused"        # SIGSTOP'd
-    DONE = "done"            # Exited with code 0
-    ERROR = "error"          # Exited with non-zero or error pattern
+    WAITING = "waiting"  # Agent needs input
+    PAUSED = "paused"  # SIGSTOP'd
+    DONE = "done"  # Exited with code 0
+    ERROR = "error"  # Exited with non-zero or error pattern
 
 
 def compute_session_state(

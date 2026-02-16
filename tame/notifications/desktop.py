@@ -45,8 +45,10 @@ class DesktopNotifier:
 
         cmd: list[str] = [
             "notify-send",
-            "--urgency", urgency,
-            "--expire-time", str(self.timeout_ms),
+            "--urgency",
+            urgency,
+            "--expire-time",
+            str(self.timeout_ms),
         ]
 
         if self.icon_path:

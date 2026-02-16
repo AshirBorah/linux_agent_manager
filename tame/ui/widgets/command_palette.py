@@ -61,7 +61,9 @@ class CommandPalette(ModalScreen[str | None]):
 
     def __init__(self) -> None:
         super().__init__()
-        self._key_map: dict[str, str] = {key: action for key, action, _ in COMMAND_ENTRIES}
+        self._key_map: dict[str, str] = {
+            key: action for key, action, _ in COMMAND_ENTRIES
+        }
 
     def compose(self) -> ComposeResult:
         with Vertical(id="cmd-box"):

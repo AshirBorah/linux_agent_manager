@@ -6,6 +6,7 @@ from functools import lru_cache
 from rich.style import Style
 from rich.text import Text
 from textual import events
+from textual.timer import Timer
 from textual.widget import Widget
 
 from tame.session.output_buffer import OutputBuffer
@@ -96,7 +97,7 @@ class SessionViewer(Widget):
         self._scroll_offset: int = 0  # 0 = at bottom
         self._auto_scroll: bool = True
         self._dirty: bool = False
-        self._refresh_timer = None
+        self._refresh_timer: Timer | None = None
 
     def append_output(self, text: str) -> None:
         """Feed new PTY output into terminal state and schedule a refresh."""
@@ -207,7 +208,11 @@ class SessionViewer(Widget):
 
     def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
         """Scroll up through history."""
-        history_len = len(self._active_terminal.screen.history.top) if self._active_terminal else 0
+        history_len = (
+            len(self._active_terminal.screen.history.top)
+            if self._active_terminal
+            else 0
+        )
         if history_len > 0:
             self._scroll_offset = min(self._scroll_offset + 3, history_len)
             self._auto_scroll = False
@@ -334,7 +339,12 @@ class SessionViewer(Widget):
                     char = row.get(x)
                     symbol = " " if char is None else (char.data or " ")
                     style = self._char_style(char)
-                    if has_focus and not cursor_hidden and x == cursor_x and y == cursor_y:
+                    if (
+                        has_focus
+                        and not cursor_hidden
+                        and x == cursor_x
+                        and y == cursor_y
+                    ):
                         style += Style(reverse=True)
                     output.append(symbol, style=style)
                 if y < rows - 1:

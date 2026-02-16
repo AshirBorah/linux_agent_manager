@@ -1,4 +1,5 @@
 """Smoke tests for the TAMEApp TUI using Textual's async pilot."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -11,7 +12,7 @@ from tame.app import TAMEApp
 from tame.session.output_buffer import OutputBuffer
 from tame.session.pattern_matcher import PatternMatcher
 from tame.session.session import Session
-from tame.session.state import AttentionState, ProcessState, SessionState
+from tame.session.state import AttentionState, ProcessState
 from tame.ui.widgets import (
     CommandPalette,
     HeaderBar,
@@ -58,7 +59,9 @@ def app(tmp_path, monkeypatch) -> TAMEApp:
 
     monkeypatch.setattr(app._session_manager, "create_session", _fake_create_session)
     monkeypatch.setattr(app._session_manager, "send_input", lambda _sid, _text: None)
-    monkeypatch.setattr(app._session_manager, "resize_session", lambda _sid, _rows, _cols: None)
+    monkeypatch.setattr(
+        app._session_manager, "resize_session", lambda _sid, _rows, _cols: None
+    )
     monkeypatch.setattr(app, "_list_existing_tmux_sessions", lambda: [])
     return app
 
@@ -74,7 +77,7 @@ async def _create_session_via_dialog(pilot) -> None:
 @pytest.mark.asyncio
 async def test_app_composes_all_widgets(app: TAMEApp) -> None:
     """Verify all major widgets are present after mount."""
-    async with app.run_test() as pilot:
+    async with app.run_test():
         assert app.query_one(HeaderBar)
         assert app.query_one(SessionSidebar)
         assert app.query_one(SessionViewer)
@@ -85,7 +88,7 @@ async def test_app_composes_all_widgets(app: TAMEApp) -> None:
 @pytest.mark.asyncio
 async def test_status_bar_initial_text(app: TAMEApp) -> None:
     """Status bar should show zero sessions on launch."""
-    async with app.run_test() as pilot:
+    async with app.run_test():
         bar = app.query_one(StatusBar)
         text = str(bar.render())
         assert "Sessions: 0" in text
@@ -94,7 +97,7 @@ async def test_status_bar_initial_text(app: TAMEApp) -> None:
 @pytest.mark.asyncio
 async def test_header_bar_initial_text(app: TAMEApp) -> None:
     """Header bar should show just 'TAME' on launch with no session selected."""
-    async with app.run_test() as pilot:
+    async with app.run_test():
         header = app.query_one(HeaderBar)
         text = str(header.render())
         assert "TAME" in text
@@ -262,7 +265,7 @@ async def test_name_dialog_escape_cancels(app: TAMEApp) -> None:
 @pytest.mark.asyncio
 async def test_empty_state_message(app: TAMEApp) -> None:
     """Viewer should show a branded welcome screen when no session is active."""
-    async with app.run_test(size=(120, 40)) as pilot:
+    async with app.run_test(size=(120, 40)):
         viewer = app.query_one(SessionViewer)
         text = str(viewer.render())
         assert "Terminal Agent Management Environment" in text
@@ -376,7 +379,9 @@ def test_get_patterns_merges_shell_regexes(tmp_path, monkeypatch) -> None:
     assert r"(?i)\berror\b[:\s]" in error_patterns
     assert r"command not found" in error_patterns
     # Agent patterns come before shell patterns
-    assert error_patterns.index(r"(?i)\berror\b[:\s]") < error_patterns.index(r"command not found")
+    assert error_patterns.index(r"(?i)\berror\b[:\s]") < error_patterns.index(
+        r"command not found"
+    )
 
 
 def test_get_patterns_works_without_shell_regexes(tmp_path, monkeypatch) -> None:

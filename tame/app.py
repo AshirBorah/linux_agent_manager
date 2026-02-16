@@ -166,7 +166,9 @@ class TAMEApp(App):
 
         super().__init__(css_path=str(css_path) if css_path else None)
 
-        log_level = "DEBUG" if verbose else str(cfg.get("general", {}).get("log_level", "INFO"))
+        log_level = (
+            "DEBUG" if verbose else str(cfg.get("general", {}).get("log_level", "INFO"))
+        )
         log_file = str(cfg.get("general", {}).get("log_file", ""))
         setup_logging(log_file=log_file, log_level=log_level)
 
@@ -196,8 +198,14 @@ class TAMEApp(App):
             idle_threshold_seconds=idle_threshold,
             idle_prompt_timeout=idle_prompt_timeout,
         )
-        default_working_dir = str(sessions_cfg.get("default_working_directory", "")).strip()
-        self._default_working_dir = os.path.expanduser(default_working_dir) if default_working_dir else os.path.expanduser("~")
+        default_working_dir = str(
+            sessions_cfg.get("default_working_directory", "")
+        ).strip()
+        self._default_working_dir = (
+            os.path.expanduser(default_working_dir)
+            if default_working_dir
+            else os.path.expanduser("~")
+        )
         default_shell = str(sessions_cfg.get("default_shell", "")).strip()
         self._default_shell = default_shell or os.environ.get("SHELL", "/bin/bash")
 
@@ -209,7 +217,9 @@ class TAMEApp(App):
         self._tmux_session_prefix = tmux_prefix or "tame"
         self._tmux_available = shutil.which("tmux") is not None
         if self._start_in_tmux and not self._tmux_available:
-            log.warning("sessions.start_in_tmux=true but tmux is not installed; falling back to shell")
+            log.warning(
+                "sessions.start_in_tmux=true but tmux is not installed; falling back to shell"
+            )
 
         notif_cfg = cfg.get("notifications", {})
         self._notification_engine = NotificationEngine(notif_cfg)
@@ -227,7 +237,9 @@ class TAMEApp(App):
         result: dict[str, list[str]] = {}
         for category in ("error", "prompt", "completion", "progress"):
             cat_cfg = patterns_cfg.get(category, {})
-            if isinstance(cat_cfg, dict) and ("regexes" in cat_cfg or "shell_regexes" in cat_cfg):
+            if isinstance(cat_cfg, dict) and (
+                "regexes" in cat_cfg or "shell_regexes" in cat_cfg
+            ):
                 regexes = list(cat_cfg.get("regexes", []))
                 shell_regexes = list(cat_cfg.get("shell_regexes", []))
                 if category == "error":
@@ -283,7 +295,10 @@ class TAMEApp(App):
     # ------------------------------------------------------------------
 
     def _handle_status_change(
-        self, session_id: str, old_state: SessionState, new_state: SessionState,
+        self,
+        session_id: str,
+        old_state: SessionState,
+        new_state: SessionState,
         matched_text: str = "",
     ) -> None:
         self.post_message(
@@ -346,6 +361,7 @@ class TAMEApp(App):
     def on_sidebar_flash(self, event: SidebarFlash) -> None:
         try:
             from tame.ui.widgets.session_list_item import SessionListItem
+
             item = self.query_one(f"#session-item-{event.session_id}", SessionListItem)
             item.add_class("flash")
             self.set_timer(2.0, lambda: item.remove_class("flash"))
@@ -461,7 +477,7 @@ class TAMEApp(App):
         new_theme = self._theme_manager.cycle()
         css_path = self._theme_manager.get_css_path()
         if css_path:
-            self.stylesheet = css_path.read_text()
+            self.stylesheet = css_path.read_text()  # type: ignore[assignment]
             self.refresh_css()
         log.info("Switched theme to '%s'", new_theme)
 
@@ -479,7 +495,7 @@ class TAMEApp(App):
             callback=self._confirm_kill_session,
         )
 
-    def _confirm_kill_session(self, confirmed: bool) -> None:
+    def _confirm_kill_session(self, confirmed: bool | None) -> None:
         if not confirmed:
             return
         session_id = self._active_session_id
@@ -545,9 +561,11 @@ class TAMEApp(App):
             new_tmux = self._build_tmux_session_name(new_name)
             if new_tmux:
                 import subprocess
+
                 subprocess.run(
                     ["tmux", "rename-session", "-t", tmux_name, new_tmux],
-                    capture_output=True, check=False,
+                    capture_output=True,
+                    check=False,
                 )
                 session.metadata["tmux_session_name"] = new_tmux
         log.info("Renamed session %s to '%s'", session_id, new_name)
@@ -813,7 +831,7 @@ class TAMEApp(App):
     def _display_name_for_tmux_session(self, tmux_session: str) -> str:
         prefix = f"{self._tmux_session_prefix}-"
         if tmux_session.startswith(prefix):
-            return tmux_session[len(prefix):]
+            return tmux_session[len(prefix) :]
         return tmux_session
 
     def _resize_active_session(self) -> None:
@@ -880,6 +898,7 @@ class TAMEApp(App):
             return
         try:
             import psutil
+
             proc = psutil.Process(session.pid)
             cpu = proc.cpu_percent(interval=0)
             mem_info = proc.memory_info()

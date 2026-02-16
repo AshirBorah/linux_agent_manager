@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 
 
 def main() -> None:
@@ -16,7 +15,9 @@ def main() -> None:
 
     from tame.app import TAMEApp
 
-    app = TAMEApp(config_path=args.config, theme_override=args.theme, verbose=args.verbose)
+    app = TAMEApp(
+        config_path=args.config, theme_override=args.theme, verbose=args.verbose
+    )
     app.run()
 
 

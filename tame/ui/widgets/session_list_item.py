@@ -56,7 +56,12 @@ class SessionListItem(Static):
     }
     """
 
-    def __init__(self, session_id: str, name: str = "", status: SessionState = SessionState.CREATED) -> None:
+    def __init__(
+        self,
+        session_id: str,
+        name: str = "",
+        status: SessionState = SessionState.CREATED,
+    ) -> None:
         super().__init__(classes="session-item")
         self.session_id = session_id
         self._session_name = name
@@ -80,7 +85,7 @@ class SessionListItem(Static):
     def _name_style(self) -> str:
         """Use explicit high-contrast session-name color for readability."""
         try:
-            if self.app.dark:
+            if self.app.dark:  # type: ignore[attr-defined]
                 return "bold #f5f5f5"
             return "bold #1f1f1f"
         except Exception:

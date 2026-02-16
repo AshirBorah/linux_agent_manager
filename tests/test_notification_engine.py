@@ -31,10 +31,12 @@ class TestDispatch:
         assert event.priority is Priority.CRITICAL
 
     def test_dnd_suppresses_notifications(self) -> None:
-        engine = _make_engine({
-            "desktop": {"enabled": True},
-            "audio": {"enabled": True},
-        })
+        engine = _make_engine(
+            {
+                "desktop": {"enabled": True},
+                "audio": {"enabled": True},
+            }
+        )
         engine.set_dnd(True)
 
         toast_cb = MagicMock()
@@ -50,10 +52,12 @@ class TestDispatch:
         toast_cb.assert_not_called()
 
     def test_routing_respects_config(self) -> None:
-        engine = _make_engine({
-            "desktop": {"enabled": True},
-            "audio": {"enabled": True},
-        })
+        engine = _make_engine(
+            {
+                "desktop": {"enabled": True},
+                "audio": {"enabled": True},
+            }
+        )
 
         toast_cb = MagicMock()
         sidebar_cb = MagicMock()
@@ -96,11 +100,13 @@ class TestDispatch:
         assert recent[0].event_type is EventType.ERROR
 
     def test_history_ring_buffer_eviction(self) -> None:
-        engine = _make_engine({
-            "desktop": {"enabled": False},
-            "audio": {"enabled": False},
-            "history": {"max_size": 3},
-        })
+        engine = _make_engine(
+            {
+                "desktop": {"enabled": False},
+                "audio": {"enabled": False},
+                "history": {"max_size": 3},
+            }
+        )
 
         for i in range(5):
             engine.dispatch(

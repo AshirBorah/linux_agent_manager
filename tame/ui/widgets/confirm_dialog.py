@@ -46,8 +46,12 @@ class ConfirmDialog(ModalScreen[bool]):
         with Vertical(id="dialog-box"):
             yield Label(self._message)
             with Horizontal(id="dialog-buttons"):
-                yield Button("\\[Y]es", id="confirm-yes", variant="error", classes="dialog-btn")
-                yield Button("\\[n]o", id="confirm-no", variant="primary", classes="dialog-btn")
+                yield Button(
+                    "\\[Y]es", id="confirm-yes", variant="error", classes="dialog-btn"
+                )
+                yield Button(
+                    "\\[n]o", id="confirm-no", variant="primary", classes="dialog-btn"
+                )
 
     def on_mount(self) -> None:
         self.query_one("#confirm-no", Button).focus()

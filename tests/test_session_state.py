@@ -52,32 +52,56 @@ def test_all_attention_states_exist() -> None:
 
 
 def test_starting_gives_starting() -> None:
-    assert compute_session_state(ProcessState.STARTING, AttentionState.NONE) is SessionState.STARTING
+    assert (
+        compute_session_state(ProcessState.STARTING, AttentionState.NONE)
+        is SessionState.STARTING
+    )
 
 
 def test_paused_gives_paused() -> None:
-    assert compute_session_state(ProcessState.PAUSED, AttentionState.NONE) is SessionState.PAUSED
+    assert (
+        compute_session_state(ProcessState.PAUSED, AttentionState.NONE)
+        is SessionState.PAUSED
+    )
 
 
 def test_exited_clean_gives_done() -> None:
-    assert compute_session_state(ProcessState.EXITED, AttentionState.NONE) is SessionState.DONE
+    assert (
+        compute_session_state(ProcessState.EXITED, AttentionState.NONE)
+        is SessionState.DONE
+    )
 
 
 def test_exited_with_error_gives_error() -> None:
-    assert compute_session_state(ProcessState.EXITED, AttentionState.ERROR_SEEN) is SessionState.ERROR
+    assert (
+        compute_session_state(ProcessState.EXITED, AttentionState.ERROR_SEEN)
+        is SessionState.ERROR
+    )
 
 
 def test_running_none_gives_active() -> None:
-    assert compute_session_state(ProcessState.RUNNING, AttentionState.NONE) is SessionState.ACTIVE
+    assert (
+        compute_session_state(ProcessState.RUNNING, AttentionState.NONE)
+        is SessionState.ACTIVE
+    )
 
 
 def test_running_needs_input_gives_waiting() -> None:
-    assert compute_session_state(ProcessState.RUNNING, AttentionState.NEEDS_INPUT) is SessionState.WAITING
+    assert (
+        compute_session_state(ProcessState.RUNNING, AttentionState.NEEDS_INPUT)
+        is SessionState.WAITING
+    )
 
 
 def test_running_error_seen_gives_error() -> None:
-    assert compute_session_state(ProcessState.RUNNING, AttentionState.ERROR_SEEN) is SessionState.ERROR
+    assert (
+        compute_session_state(ProcessState.RUNNING, AttentionState.ERROR_SEEN)
+        is SessionState.ERROR
+    )
 
 
 def test_running_idle_gives_idle() -> None:
-    assert compute_session_state(ProcessState.RUNNING, AttentionState.IDLE) is SessionState.IDLE
+    assert (
+        compute_session_state(ProcessState.RUNNING, AttentionState.IDLE)
+        is SessionState.IDLE
+    )

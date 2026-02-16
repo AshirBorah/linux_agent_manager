@@ -23,8 +23,7 @@ class PatternMatcher:
         self._compiled: dict[str, list[tuple[int, re.Pattern[str]]]] = {}
         for category, raw_patterns in patterns.items():
             self._compiled[category] = [
-                (i, re.compile(p, re.IGNORECASE))
-                for i, p in enumerate(raw_patterns)
+                (i, re.compile(p, re.IGNORECASE)) for i, p in enumerate(raw_patterns)
             ]
 
     def scan(self, line: str) -> PatternMatch | None:

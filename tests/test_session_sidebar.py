@@ -8,9 +8,8 @@ from tame.app import TAMEApp
 from tame.session.output_buffer import OutputBuffer
 from tame.session.pattern_matcher import PatternMatcher
 from tame.session.session import Session
-from tame.session.state import AttentionState, ProcessState, SessionState
+from tame.session.state import AttentionState, ProcessState
 from tame.ui.widgets.session_list_item import SessionListItem
-from tame.ui.widgets.session_sidebar import SessionSidebar
 from textual.widgets import Label
 
 
@@ -62,7 +61,9 @@ def app(tmp_path, monkeypatch) -> TAMEApp:
 
     monkeypatch.setattr(app._session_manager, "create_session", _fake_create_session)
     monkeypatch.setattr(app._session_manager, "send_input", lambda _sid, _text: None)
-    monkeypatch.setattr(app._session_manager, "resize_session", lambda _sid, _rows, _cols: None)
+    monkeypatch.setattr(
+        app._session_manager, "resize_session", lambda _sid, _rows, _cols: None
+    )
     monkeypatch.setattr(app, "_list_existing_tmux_sessions", lambda: [])
     return app
 

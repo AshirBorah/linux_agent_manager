@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from textual.timer import Timer
 from textual.widgets import Static
 
 
@@ -26,7 +27,7 @@ class ToastOverlay(Static):
 
     def __init__(self) -> None:
         super().__init__("", id="toast-overlay")
-        self._dismiss_timer = None
+        self._dismiss_timer: Timer | None = None
 
     def show_toast(self, title: str, message: str, duration: float = 5) -> None:
         """Show a notification that auto-dismisses after *duration* seconds."""

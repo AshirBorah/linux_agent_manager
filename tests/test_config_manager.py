@@ -2,14 +2,20 @@ from __future__ import annotations
 
 import textwrap
 
-import pytest
 
 from tame.config.defaults import DEFAULT_CONFIG
 from tame.config.manager import ConfigManager
 
 
 def test_default_config_has_all_sections() -> None:
-    expected = {"general", "sessions", "patterns", "theme", "notifications", "keybindings"}
+    expected = {
+        "general",
+        "sessions",
+        "patterns",
+        "theme",
+        "notifications",
+        "keybindings",
+    }
     assert expected == set(DEFAULT_CONFIG.keys())
 
 

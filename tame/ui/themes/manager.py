@@ -62,7 +62,11 @@ class ThemeManager:
     def cycle(self) -> str:
         if not self._available:
             return self._current
-        idx = self._available.index(self._current) if self._current in self._available else -1
+        idx = (
+            self._available.index(self._current)
+            if self._current in self._available
+            else -1
+        )
         self._current = self._available[(idx + 1) % len(self._available)]
         return self._current
 
