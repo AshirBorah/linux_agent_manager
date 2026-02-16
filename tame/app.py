@@ -477,8 +477,13 @@ class TAMEApp(App):
         new_theme = self._theme_manager.cycle()
         css_path = self._theme_manager.get_css_path()
         if css_path:
-            self.stylesheet = css_path.read_text()  # type: ignore[assignment]
-            self.refresh_css()
+            self.stylesheet.source.clear()
+            self.stylesheet.add_source(
+                css_path.read_text(), read_from=(str(css_path), "")
+            )
+            self.stylesheet.set_variables(self.get_css_variables())
+            self.stylesheet.reparse()
+            self.stylesheet.update(self)
         log.info("Switched theme to '%s'", new_theme)
 
     def action_kill_session(self) -> None:
