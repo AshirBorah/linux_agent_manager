@@ -60,7 +60,13 @@ class SessionManager:
         self._scan_partials: dict[str, str] = {}
         self._on_status_change = on_status_change
         self._on_output = on_output
-        self._patterns = patterns or DEFAULT_PATTERNS
+        self._patterns: dict[str, list[str]] = {
+            category: list(regexes)
+            for category, regexes in DEFAULT_PATTERNS.items()
+        }
+        if patterns:
+            for category, regexes in patterns.items():
+                self._patterns[category] = list(regexes)
         self._loop: asyncio.AbstractEventLoop | None = None
 
     # ------------------------------------------------------------------
@@ -224,6 +230,48 @@ class SessionManager:
             partial_match = session.pattern_matcher.scan(partial)
             if partial_match and partial_match.category == "prompt":
                 self._set_status(session, SessionState.WAITING)
+
+    # ------------------------------------------------------------------
+    # Pane content scanning (for tmux restore)
+    # ------------------------------------------------------------------
+
+    def scan_pane_content(self, session_id: str, text: str) -> None:
+        """Scan captured pane text and update session status.
+
+        Unlike ``_on_session_output``, this does **not** append to the
+        output buffer or trigger UI output — it only sets status based
+        on the last matching pattern found in *text*.
+        """
+        session = self._get(session_id)
+        cleaned = ANSI_ESCAPE_RE.sub("", text)
+        lines = cleaned.split("\n")
+
+        last_match: PatternMatch | None = None
+        for line in lines:
+            if not line.strip():
+                continue
+            match = session.pattern_matcher.scan(line)
+            if match:
+                last_match = match
+
+        # Check final non-empty line as a partial (prompts often lack
+        # a trailing newline).
+        for line in reversed(lines):
+            stripped = line.strip()
+            if stripped:
+                match = session.pattern_matcher.scan(stripped)
+                if match and match.category == "prompt":
+                    last_match = match
+                break
+
+        if last_match is None:
+            return
+        if last_match.category == "error":
+            self._set_status(session, SessionState.ERROR)
+        elif last_match.category == "prompt":
+            self._set_status(session, SessionState.WAITING)
+        elif last_match.category == "completion":
+            self._set_status(session, SessionState.DONE)
 
     # ------------------------------------------------------------------
     # Event loop integration

@@ -52,6 +52,10 @@ BROAD_RATE_LIMIT_PATTERNS = {
 REFINED_RATE_LIMIT_PATTERN = (
     r"(?i)rate.?limit(?:ed|ing)?(?:\s+(?:exceeded|reached|hit)|\s*[:\-])"
 )
+REQUIRED_PROMPT_PATTERNS = [
+    r"Do you want to (?:continue|proceed)",
+    r"\?\s*$",
+]
 
 SPECIAL_KEY_SEQUENCES: dict[str, str] = {
     "enter": "\r",
@@ -187,6 +191,8 @@ class LAMApp(App):
                 regexes = list(cat_cfg["regexes"])
                 if category == "error":
                     regexes = self._normalize_error_patterns(regexes)
+                elif category == "prompt":
+                    regexes = self._normalize_prompt_patterns(regexes)
                 result[category] = regexes
         return result or None
 
@@ -203,6 +209,14 @@ class LAMApp(App):
                 saw_rate_limit = True
         if saw_rate_limit:
             normalized.append(REFINED_RATE_LIMIT_PATTERN)
+        return normalized
+
+    def _normalize_prompt_patterns(self, regexes: list[str]) -> list[str]:
+        """Ensure baseline prompt detection patterns exist in user config."""
+        normalized = list(regexes)
+        for required in REQUIRED_PROMPT_PATTERNS:
+            if required not in normalized:
+                normalized.append(required)
         return normalized
 
     def compose(self) -> ComposeResult:
@@ -463,6 +477,11 @@ class LAMApp(App):
                 continue
 
             session.metadata["tmux_session_name"] = tmux_session
+
+            pane_text = self._capture_tmux_pane(tmux_session)
+            if pane_text:
+                self._session_manager.scan_pane_content(session.id, pane_text)
+
             sidebar.add_session(session)
             if self._active_session_id is None:
                 self._select_session(session.id)
@@ -471,6 +490,17 @@ class LAMApp(App):
         if restored_count:
             self._update_status_bar()
             log.info("Restored %d tmux session(s)", restored_count)
+
+    def _capture_tmux_pane(self, tmux_session: str) -> str:
+        proc = subprocess.run(
+            ["tmux", "capture-pane", "-p", "-t", tmux_session],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return ""
+        return proc.stdout
 
     def _list_existing_tmux_sessions(self) -> list[str]:
         proc = subprocess.run(

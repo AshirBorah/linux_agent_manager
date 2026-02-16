@@ -289,3 +289,12 @@ def test_normalize_legacy_rate_limit_pattern(tmp_path, monkeypatch) -> None:
         r"(?i)rate.?limit(?:ed|ing)?(?:\s+(?:exceeded|reached|hit)|\s*[:\-])"
         in patterns
     )
+
+
+def test_normalize_legacy_prompt_patterns(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    app = LAMApp()
+    patterns = app._normalize_prompt_patterns([r"\[y/n\]"])
+    assert r"\?\s*$" in patterns
+    assert r"Do you want to (?:continue|proceed)" in patterns
