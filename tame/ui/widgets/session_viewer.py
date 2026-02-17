@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import re
+from collections import defaultdict
 from functools import lru_cache
 
 from rich.style import Style
@@ -10,11 +12,18 @@ from textual.timer import Timer
 from textual.widget import Widget
 
 from tame.session.output_buffer import OutputBuffer
+from tame.ui.events import ViewerResized
+
+log = logging.getLogger("tame.viewer")
 
 try:
     import pyte
-except Exception:  # pragma: no cover - fallback for environments missing pyte
+    from pyte.screens import StaticDefaultDict
+    _PYTE_IMPORT_ERROR: Exception | None = None
+except Exception as exc:  # pragma: no cover - fallback for environments missing pyte
     pyte = None  # type: ignore[assignment]
+    StaticDefaultDict = None  # type: ignore[assignment,misc]
+    _PYTE_IMPORT_ERROR = exc
 
 
 _FG_COLOR_MAP: dict[str, str] = {
@@ -43,6 +52,9 @@ _BG_COLOR_MAP: dict[str, str] = {
 }
 
 _HEX_COLOR_RE = re.compile(r"^[0-9a-fA-F]{6}$")
+_FALLBACK_FULL_CLEAR_RE = re.compile(
+    r"\x0c|\x1bc|\x1b\[(?:2|3)J|\x1b\[(?:H|1;1H|1;H|;1H|;H)\x1b\[(?:0)?J"
+)
 
 
 def _normalize_color(name: str) -> str:
@@ -52,6 +64,126 @@ def _normalize_color(name: str) -> str:
     return name
 
 
+class TAMEScreen(pyte.HistoryScreen):
+    """HistoryScreen subclass with alternate screen buffer support.
+
+    Real terminals maintain two separate buffer objects and swap references
+    on mode switches.  This avoids the deep-copy pitfall where
+    ``StaticDefaultDict`` semantics (row defaults) are lost.
+
+    Handled private modes:
+      47   — legacy alt screen (swap only)
+      1047 — alt screen (swap only)
+      1048 — cursor save/restore only (no buffer swap)
+      1049 — combined: cursor save + alt screen + clear
+    """
+
+    _alt_active: bool = False
+    _saved_buffer: object | None = (
+        None  # pyte's buffer (defaultdict of StaticDefaultDict)
+    )
+    _saved_cursor: tuple | None = None  # (x, y, attrs, hidden)
+
+    def set_mode(self, *modes, **kwargs):
+        private = kwargs.get("private", False)
+        handled: set[int] = set()
+        for mode in modes:
+            if not private:
+                continue
+            if mode in (47, 1047):
+                self._enter_alt_screen(save_cursor=False)
+                handled.add(mode)
+            elif mode == 1048:
+                self._save_cursor()
+                handled.add(mode)
+            elif mode == 1049:
+                self._enter_alt_screen(save_cursor=True)
+                handled.add(mode)
+        remaining = [m for m in modes if m not in handled]
+        if remaining:
+            super().set_mode(*remaining, **kwargs)
+
+    def reset_mode(self, *modes, **kwargs):
+        private = kwargs.get("private", False)
+        handled: set[int] = set()
+        for mode in modes:
+            if not private:
+                continue
+            if mode in (47, 1047):
+                self._exit_alt_screen(restore_cursor=False)
+                handled.add(mode)
+            elif mode == 1048:
+                self._restore_cursor()
+                handled.add(mode)
+            elif mode == 1049:
+                self._exit_alt_screen(restore_cursor=True)
+                handled.add(mode)
+        remaining = [m for m in modes if m not in handled]
+        if remaining:
+            super().reset_mode(*remaining, **kwargs)
+
+    # ------------------------------------------------------------------
+
+    def _save_cursor(self) -> None:
+        cursor = self.cursor
+        self._saved_cursor = (
+            cursor.x,
+            cursor.y,
+            cursor.attrs,
+            cursor.hidden,
+        )
+
+    def _restore_cursor(self) -> None:
+        if self._saved_cursor is not None:
+            x, y, attrs, hidden = self._saved_cursor
+            self.cursor.x = x
+            self.cursor.y = y
+            self.cursor.attrs = attrs
+            self.cursor.hidden = hidden
+            self._saved_cursor = None
+
+    def resize(self, lines=None, columns=None):
+        old_columns = self.columns
+        super().resize(lines=lines, columns=columns)
+        if self._alt_active and self._saved_buffer is not None:
+            if self.columns < old_columns:
+                for line in self._saved_buffer.values():  # type: ignore[union-attr]
+                    for x in range(self.columns, old_columns):
+                        line.pop(x, None)
+
+    def _enter_alt_screen(self, *, save_cursor: bool) -> None:
+        if self._alt_active:
+            return
+        self._alt_active = True
+        log.debug("Entering alt screen (save_cursor=%s, %dx%d)", save_cursor, self.lines, self.columns)
+
+        if save_cursor:
+            self._save_cursor()
+
+        # O(1) reference swap — keeps full StaticDefaultDict semantics
+        self._saved_buffer = self.buffer
+        self.buffer = defaultdict(lambda: StaticDefaultDict(self.default_char))
+
+        self.cursor.x = 0
+        self.cursor.y = 0
+        self.dirty.update(range(self.lines))
+
+    def _exit_alt_screen(self, *, restore_cursor: bool) -> None:
+        if not self._alt_active:
+            return
+        self._alt_active = False
+        log.debug("Exiting alt screen (restore_cursor=%s, %dx%d)", restore_cursor, self.lines, self.columns)
+
+        # O(1) reference restore
+        self.buffer = self._saved_buffer  # type: ignore[assignment]
+        self._saved_buffer = None
+
+        if restore_cursor:
+            self._restore_cursor()
+
+        self.dirty.update(range(self.lines))
+
+
 class _TerminalState:
     """Cached pyte terminal state for a single session."""
 
@@ -59,7 +191,7 @@ class _TerminalState:
 
     def __init__(self, session_id: str, rows: int, cols: int) -> None:
         self.session_id = session_id
-        self.screen = pyte.HistoryScreen(columns=cols, lines=rows, history=10000)
+        self.screen = TAMEScreen(columns=cols, lines=rows, history=10000)
         self.stream = pyte.Stream(self.screen)
 
     def feed(self, text: str) -> None:
@@ -85,9 +217,15 @@ class SessionViewer(Widget):
 
     # Target ≤60 UI updates/sec per session
     _RENDER_INTERVAL: float = 1.0 / 60
+    _FALLBACK_MAX_CHARS: int = 500_000
 
     def __init__(self) -> None:
         super().__init__(id="session-viewer")
+        if pyte is None:
+            log.warning(
+                "pyte unavailable; using degraded ANSI fallback renderer (%s)",
+                _PYTE_IMPORT_ERROR,
+            )
         self._fallback_text: str = ""
         self._rows: int = 24
         self._cols: int = 80
@@ -105,7 +243,7 @@ class SessionViewer(Widget):
             return
 
         if self._active_terminal is None:
-            self._fallback_text += text
+            self._fallback_text = self._append_fallback_text(self._fallback_text, text)
             self._schedule_refresh()
             return
 
@@ -136,7 +274,10 @@ class SessionViewer(Widget):
         self._auto_scroll = True
 
         if pyte is None:
-            self._fallback_text = output_buffer.get_all_text()
+            self._fallback_text = self._append_fallback_text(
+                "",
+                output_buffer.get_all_text(),
+            )
             self.refresh()
             return
 
@@ -166,7 +307,7 @@ class SessionViewer(Widget):
         self._has_session = True
         full_text = output_buffer.get_all_text()
         if pyte is None:
-            self._fallback_text = full_text
+            self._fallback_text = self._append_fallback_text("", full_text)
             self.refresh()
             return
 
@@ -177,6 +318,15 @@ class SessionViewer(Widget):
             terminal.feed(full_text)
         self._terminals["__legacy__"] = terminal
         self._active_terminal = terminal
+        self.refresh()
+
+    def show_snapshot(self, text: str) -> None:
+        """Render a full-screen ANSI snapshot, replacing prior viewport state."""
+        self._has_session = True
+        self._scroll_offset = 0
+        self._auto_scroll = True
+        self._active_terminal = None
+        self._fallback_text = text
         self.refresh()
 
     def feed_session(self, session_id: str, text: str) -> None:
@@ -216,6 +366,7 @@ class SessionViewer(Widget):
         for terminal in self._terminals.values():
             terminal.resize(rows, cols)
 
+        self.post_message(ViewerResized(rows, cols))
         self.refresh()
 
     def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
@@ -420,3 +571,20 @@ class SessionViewer(Widget):
             bool(getattr(char, "strikethrough", False)),
             bool(getattr(char, "reverse", False)),
         )
+
+    @classmethod
+    def _append_fallback_text(cls, existing: str, new_text: str) -> str:
+        """Best-effort ANSI fallback state when pyte is unavailable.
+
+        Rich's ANSI parser doesn't emulate display-clearing control sequences,
+        so we trim content before the most recent full-screen clear.
+        """
+        merged = existing + new_text
+        last_clear_end = -1
+        for match in _FALLBACK_FULL_CLEAR_RE.finditer(merged):
+            last_clear_end = match.end()
+        if last_clear_end >= 0:
+            merged = merged[last_clear_end:]
+        if len(merged) > cls._FALLBACK_MAX_CHARS:
+            merged = merged[-cls._FALLBACK_MAX_CHARS :]
+        return merged

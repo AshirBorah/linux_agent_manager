@@ -24,19 +24,45 @@ from tame.ui.widgets import (
 from tame.ui.widgets.session_list_item import SessionListItem
 
 
+class _DummyTimer:
+    def __init__(self) -> None:
+        self.stopped = False
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
+class _DummyViewer:
+    def __init__(self) -> None:
+        self.appended: list[str] = []
+        self.snapshots: list[str] = []
+        self.invalidated: list[str] = []
+
+    def append_output(self, text: str) -> None:
+        self.appended.append(text)
+
+    def show_snapshot(self, text: str) -> None:
+        self.snapshots.append(text)
+
+    def invalidate_session(self, session_id: str) -> None:
+        self.invalidated.append(session_id)
+
+
 @pytest.fixture
 def app(tmp_path, monkeypatch) -> TAMEApp:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     app = TAMEApp()
+    app._tmux_snapshot_render = False
 
     def _fake_create_session(
         name: str,
         working_dir: str,
         shell: str | None = None,
         command: list[str] | None = None,
+        **kwargs,
     ) -> Session:
-        del shell, command
+        del shell, command, kwargs
         session_id = f"test-session-{len(app._session_manager._sessions) + 1}"
         now = datetime.now(timezone.utc)
         output_buffer = OutputBuffer()
@@ -353,15 +379,6 @@ def test_normalize_legacy_rate_limit_pattern(tmp_path, monkeypatch) -> None:
     )
 
 
-def test_normalize_legacy_prompt_patterns(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    app = TAMEApp()
-    patterns = app._normalize_prompt_patterns([r"\[y/n\]"])
-    assert r"\?\s*$" in patterns
-    assert r"Do you want to (?:continue|proceed)" in patterns
-
-
 def test_get_patterns_merges_shell_regexes(tmp_path, monkeypatch) -> None:
     """Both agent and shell regexes should appear in the merged result, agent first."""
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -401,3 +418,142 @@ def test_get_patterns_works_without_shell_regexes(tmp_path, monkeypatch) -> None
     result = app._get_patterns_from_config(cfg)
     assert result is not None
     assert r"(?i)\berror\b[:\s]" in result["error"]
+
+
+def test_redraw_control_chunk_flushes_immediately(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    app = TAMEApp()
+    app._active_session_id = "s1"
+    app._app_focused = True
+    app._output_flush_timer = _DummyTimer()
+
+    flushed = {"count": 0}
+
+    def _fake_flush() -> None:
+        flushed["count"] += 1
+        app._output_pending = {}
+        app._output_flush_timer = None
+
+    monkeypatch.setattr(app, "_flush_pending_output", _fake_flush)
+
+    app._handle_pty_output("s1", "\x1b[1A" + ("x" * 200))
+
+    assert flushed["count"] == 1
+    assert app._output_pending == {}
+    assert app._output_flush_timer is None
+
+
+def test_non_redraw_chunk_still_batches(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    app = TAMEApp()
+    app._active_session_id = "s1"
+    app._app_focused = True
+
+    scheduled = {"count": 0}
+
+    def _fake_set_timer(delay, callback, name=None):  # noqa: ANN001
+        scheduled["count"] += 1
+        return _DummyTimer()
+
+    monkeypatch.setattr(app, "set_timer", _fake_set_timer)
+
+    app._handle_pty_output("s1", "x" * 200)
+
+    assert scheduled["count"] == 1
+    assert app._output_flush_timer is not None
+
+
+def test_flush_pending_output_uses_tmux_snapshot_for_active(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    app = TAMEApp()
+    app._tmux_snapshot_render = True
+    app._tmux_available = True
+
+    now = datetime.now(timezone.utc)
+    session = Session(
+        id="s1",
+        name="s1",
+        working_dir=".",
+        process_state=ProcessState.RUNNING,
+        attention_state=AttentionState.NONE,
+        created_at=now,
+        last_activity=now,
+        output_buffer=OutputBuffer(),
+        pattern_matcher=PatternMatcher(app._session_manager._patterns),
+        pid=None,
+        pty_process=None,
+    )
+    session.metadata["tmux_session_name"] = "tame-s1"
+    app._session_manager._sessions[session.id] = session
+    app._active_session_id = session.id
+    app._output_pending = {session.id: ["ignored stream output"]}
+
+    viewer = _DummyViewer()
+    monkeypatch.setattr(app, "query_one", lambda _selector, *_args, **_kwargs: viewer)
+    monkeypatch.setattr(app, "_capture_tmux_pane_render", lambda _name: "snapshot text")
+
+    app._flush_pending_output()
+
+    assert viewer.snapshots == ["snapshot text"]
+    assert viewer.appended == []
+
+
+def test_flush_pending_output_falls_back_when_snapshot_capture_fails(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    app = TAMEApp()
+    app._tmux_snapshot_render = True
+    app._tmux_available = True
+
+    now = datetime.now(timezone.utc)
+    session = Session(
+        id="s1",
+        name="s1",
+        working_dir=".",
+        process_state=ProcessState.RUNNING,
+        attention_state=AttentionState.NONE,
+        created_at=now,
+        last_activity=now,
+        output_buffer=OutputBuffer(),
+        pattern_matcher=PatternMatcher(app._session_manager._patterns),
+        pid=None,
+        pty_process=None,
+    )
+    session.metadata["tmux_session_name"] = "tame-s1"
+    app._session_manager._sessions[session.id] = session
+    app._active_session_id = session.id
+    app._output_pending = {session.id: ["stream output"]}
+
+    viewer = _DummyViewer()
+    monkeypatch.setattr(app, "query_one", lambda _selector, *_args, **_kwargs: viewer)
+    monkeypatch.setattr(app, "_capture_tmux_pane_render", lambda _name: None)
+
+    app._flush_pending_output()
+
+    assert viewer.snapshots == []
+    assert viewer.appended == ["stream output"]
+
+
+def test_sanitize_tmux_snapshot_ansi_strips_background_and_reverse() -> None:
+    text = "a\x1b[31;47;1mRED\x1b[0m\x1b[7mX\x1b[27m"
+
+    cleaned = TAMEApp._sanitize_tmux_snapshot_ansi(text)
+
+    assert "\x1b[31;1m" in cleaned
+    assert "\x1b[47m" not in cleaned
+    assert "\x1b[7m" not in cleaned
+    assert "\x1b[27m" not in cleaned
+
+
+def test_sanitize_tmux_snapshot_ansi_keeps_fg_extended_removes_bg_extended() -> None:
+    text = "\x1b[38;5;196;48;5;230mhi\x1b[0m"
+
+    cleaned = TAMEApp._sanitize_tmux_snapshot_ansi(text)
+
+    assert "\x1b[38;5;196m" in cleaned
+    assert "48;5;230" not in cleaned

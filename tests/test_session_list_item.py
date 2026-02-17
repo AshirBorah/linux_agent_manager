@@ -23,8 +23,9 @@ def app(tmp_path, monkeypatch) -> TAMEApp:
         working_dir: str,
         shell: str | None = None,
         command: list[str] | None = None,
+        **kwargs,
     ) -> Session:
-        del shell, command
+        del shell, command, kwargs
         now = datetime.now(timezone.utc)
         session_id = "test-session-1"
         output_buffer = OutputBuffer()

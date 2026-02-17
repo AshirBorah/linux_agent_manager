@@ -24,15 +24,20 @@ from tame.ui.events import (
     SessionSelected,
     SessionStatusChanged,
     SidebarFlash,
+    ViewerResized,
 )
 from tame.ui.keys.manager import KeybindManager
 from tame.ui.themes.manager import ThemeManager
 from tame.ui.widgets import (
     CommandPalette,
     ConfirmDialog,
+    DiffViewer,
+    EasterEgg,
+    GroupDialog,
     HeaderBar,
     HistoryPicker,
     NameDialog,
+    SearchDialog,
     SessionSidebar,
     SessionViewer,
     StatusBar,
@@ -56,10 +61,10 @@ BROAD_RATE_LIMIT_PATTERNS = {
 REFINED_RATE_LIMIT_PATTERN = (
     r"(?i)rate.?limit(?:ed|ing)?(?:\s+(?:exceeded|reached|hit)|\s*[:\-])"
 )
-REQUIRED_PROMPT_PATTERNS = [
-    r"Do you want to (?:continue|proceed)",
-    r"\?\s*$",
-]
+REDRAW_CONTROL_RE = re.compile(
+    r"\x1b\[[0-9;?]*(?:[ABCDHfJK])|\x1bc|\x0c|\r(?!\n)"
+)
+SGR_RE = re.compile(r"\x1b\[([0-9;]*)m")
 
 SPECIAL_KEY_SEQUENCES: dict[str, str] = {
     "enter": "\r",
@@ -139,6 +144,7 @@ class TAMEApp(App):
         "z": "pause_all",
         "u": "check_usage",
         "x": "clear_notifications",
+        "g": "set_group",
         "q": "quit",
     }
 
@@ -152,6 +158,8 @@ class TAMEApp(App):
         "toggle_sidebar": ("Toggle Sidebar", True, False),
         "resume_all": ("Resume All", False, False),
         "pause_all": ("Pause All", False, False),
+        "show_diff": ("Git Diff", False, False),
+        "set_group": ("Set Group", False, False),
         "quit": ("Quit", True, False),
         "session_1": ("Session 1", False, False),
         "session_2": ("Session 2", False, False),
@@ -168,6 +176,7 @@ class TAMEApp(App):
     BINDINGS = [
         Binding("ctrl+c", "send_sigint", "Send SIGINT", show=False, priority=True),
         Binding("ctrl+d", "send_eof", "Send EOF", show=False, priority=True),
+        Binding("ctrl+f", "global_search", "Global Search", show=False, priority=True),
         Binding("tab", "send_tab", "Tab Complete", show=False, priority=True),
     ]
 
@@ -219,12 +228,14 @@ class TAMEApp(App):
         idle_threshold = float(sessions_cfg.get("idle_threshold_seconds", 300))
         patterns_cfg = cfg.get("patterns", {})
         idle_prompt_timeout = float(patterns_cfg.get("idle_prompt_timeout", 3.0))
+        state_debounce_ms = float(patterns_cfg.get("state_debounce_ms", 500))
         self._session_manager = SessionManager(
             on_status_change=self._handle_status_change,
             on_output=self._handle_pty_output,
             patterns=self._get_patterns_from_config(cfg),
             idle_threshold_seconds=idle_threshold,
             idle_prompt_timeout=idle_prompt_timeout,
+            state_debounce_ms=state_debounce_ms,
         )
         default_working_dir = str(
             sessions_cfg.get("default_working_directory", "")
@@ -241,6 +252,9 @@ class TAMEApp(App):
         self._restore_tmux_sessions_on_startup = bool(
             sessions_cfg.get("restore_tmux_sessions_on_startup", True)
         )
+        self._tmux_snapshot_render = bool(
+            sessions_cfg.get("tmux_snapshot_render", self._start_in_tmux)
+        )
         tmux_prefix = str(sessions_cfg.get("tmux_session_prefix", "tame")).strip()
         self._tmux_session_prefix = tmux_prefix or "tame"
         self._tmux_available = shutil.which("tmux") is not None
@@ -254,6 +268,13 @@ class TAMEApp(App):
         self._notification_engine.on_toast = self._handle_notification_toast
         self._notification_engine.on_sidebar_flash = self._handle_sidebar_flash
 
+        git_cfg = cfg.get("git", {})
+        self._worktrees_enabled = bool(git_cfg.get("worktrees_enabled", False))
+        git_repo_dir = str(git_cfg.get("repo_dir", "")).strip()
+        self._git_repo_dir = (
+            os.path.expanduser(git_repo_dir) if git_repo_dir else self._default_working_dir
+        )
+
         self._active_session_id: str | None = None
         self._pending_status_updates: set[str] = set()
         self._status_update_scheduled: bool = False
@@ -265,6 +286,9 @@ class TAMEApp(App):
 
         # Input history: accumulate typed chars per session, flush on Enter
         self._input_line_buffer: dict[str, list[str]] = {}
+
+        # Easter egg: triggers once per app run
+        self._easter_egg_shown: bool = False
 
     def _get_patterns_from_config(self, cfg: dict) -> dict[str, list[str]]:
         patterns_cfg = cfg.get("patterns", {})
@@ -280,8 +304,6 @@ class TAMEApp(App):
                 shell_regexes = list(cat_cfg.get("shell_regexes", []))
                 if category == "error":
                     regexes = self._normalize_error_patterns(regexes)
-                elif category == "prompt":
-                    regexes = self._normalize_prompt_patterns(regexes)
                 result[category] = regexes + shell_regexes
         return result
 
@@ -300,14 +322,6 @@ class TAMEApp(App):
             normalized.append(REFINED_RATE_LIMIT_PATTERN)
         return normalized
 
-    def _normalize_prompt_patterns(self, regexes: list[str]) -> list[str]:
-        """Ensure baseline prompt detection patterns exist in user config."""
-        normalized = list(regexes)
-        for required in REQUIRED_PROMPT_PATTERNS:
-            if required not in normalized:
-                normalized.append(required)
-        return normalized
-
     def compose(self) -> ComposeResult:
         yield HeaderBar()
         with Horizontal(id="main-content"):
@@ -320,7 +334,6 @@ class TAMEApp(App):
     def on_mount(self) -> None:
         loop = asyncio.get_running_loop()
         self._session_manager.attach_to_loop(loop)
-        self._session_manager.start_idle_checker()
         self.call_later(self._restore_tmux_sessions_async)
         self._start_resource_poll()
         log.info("TAME started")
@@ -412,8 +425,17 @@ class TAMEApp(App):
             self.action_new_session()
 
     def on_resize(self, event: events.Resize) -> None:
-        del event
-        self._resize_active_session()
+        pass  # PTY resize now handled by _on_viewer_resized
+
+    def _on_viewer_resized(self, message: ViewerResized) -> None:
+        if self._active_session_id is None:
+            return
+        try:
+            self._session_manager.resize_session(
+                self._active_session_id, message.rows, message.cols
+            )
+        except (KeyError, RuntimeError):
+            pass
 
     def on_key(self, event: events.Key) -> None:
         # --- Open command palette overlay ---
@@ -439,6 +461,9 @@ class TAMEApp(App):
             if buf:
                 line = "".join(buf).strip()
                 if line:
+                    if line == "pls pls fix" and not self._easter_egg_shown:
+                        self._easter_egg_shown = True
+                        self.push_screen(EasterEgg())
                     self._record_input_history(sid, line)
         elif pty_input == "\x7f":
             # Backspace: pop last char from buffer
@@ -486,26 +511,72 @@ class TAMEApp(App):
 
     def action_new_session(self) -> None:
         default_name = f"session-{len(self._session_manager.list_sessions()) + 1}"
-        self.push_screen(NameDialog(default_name), callback=self._create_session)
+        self.push_screen(
+            NameDialog(
+                default_name,
+                show_branch=self._worktrees_enabled,
+            ),
+            callback=self._create_session,
+        )
 
-    def _create_session(self, name: str | None) -> None:
-        if name is None:
+    def _create_session(self, result) -> None:
+        if result is None:
             return
+        if isinstance(result, tuple):
+            name = result[0]
+            profile = result[1] if len(result) > 1 else ""
+            branch = result[2] if len(result) > 2 else ""
+        else:
+            name, profile, branch = result, "", ""
 
         working_dir = self._default_working_dir
         if not os.path.isdir(working_dir):
             working_dir = os.path.expanduser("~")
 
+        # Create git worktree if branch was specified
+        worktree_path = ""
+        if branch and self._worktrees_enabled:
+            from tame.git.worktree import create_worktree
+
+            wt_path, err = create_worktree(
+                self._git_repo_dir, branch, new_branch=True
+            )
+            if err:
+                # Try attaching to existing branch
+                wt_path, err = create_worktree(
+                    self._git_repo_dir, branch, new_branch=False
+                )
+            if err:
+                log.warning("Failed to create worktree for branch %r: %s", branch, err)
+                try:
+                    toast = self.query_one(ToastOverlay)
+                    toast.show_toast(title="Worktree Error", message=err)
+                except Exception:
+                    pass
+            elif wt_path:
+                worktree_path = wt_path
+                working_dir = wt_path
+                log.info("Created worktree at %s for branch %s", wt_path, branch)
+
         command = self._build_session_command(name)
+        viewer = self.query_one(SessionViewer)
+        rows = max(1, viewer.size.height) if viewer.size.height else 24
+        cols = max(1, viewer.size.width) if viewer.size.width else 80
         session = self._session_manager.create_session(
             name,
             working_dir,
             shell=self._default_shell,
             command=command,
+            rows=rows,
+            cols=cols,
+            profile=profile,
         )
         tmux_session_name = self._build_tmux_session_name(name)
         if command and tmux_session_name:
             session.metadata["tmux_session_name"] = tmux_session_name
+        if worktree_path:
+            session.metadata["worktree_path"] = worktree_path
+            session.metadata["worktree_branch"] = branch
 
         sidebar = self.query_one(SessionSidebar)
         sidebar.add_session(session)
@@ -563,6 +634,21 @@ class TAMEApp(App):
         if session_id is None:
             return
 
+        # Clean up git worktree if one was created for this session
+        try:
+            session = self._session_manager.get_session(session_id)
+            wt_path = session.metadata.get("worktree_path")
+            if wt_path:
+                from tame.git.worktree import remove_worktree
+
+                err = remove_worktree(self._git_repo_dir, wt_path)
+                if err:
+                    log.warning("Failed to remove worktree %s: %s", wt_path, err)
+                else:
+                    log.info("Removed worktree %s", wt_path)
+        except KeyError:
+            pass
+
         try:
             self._session_manager.delete_session(session_id)
         except KeyError:
@@ -597,13 +683,14 @@ class TAMEApp(App):
         except KeyError:
             return
         self.push_screen(
-            NameDialog(session.name),
+            NameDialog(session.name, show_profile=False),
             callback=self._confirm_rename_session,
         )
 
-    def _confirm_rename_session(self, new_name: str | None) -> None:
-        if new_name is None:
+    def _confirm_rename_session(self, result) -> None:
+        if result is None:
             return
+        new_name = result[0] if isinstance(result, tuple) else result
         session_id = self._active_session_id
         if session_id is None:
             return
@@ -630,6 +717,36 @@ class TAMEApp(App):
                 )
                 session.metadata["tmux_session_name"] = new_tmux
         log.info("Renamed session %s to '%s'", session_id, new_name)
+
+    def action_set_group(self) -> None:
+        """Open a dialog to assign the active session to a group."""
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette, GroupDialog)):
+            return
+        if self._active_session_id is None:
+            return
+        try:
+            session = self._session_manager.get_session(self._active_session_id)
+        except KeyError:
+            return
+        self.push_screen(
+            GroupDialog(session.group),
+            callback=self._confirm_set_group,
+        )
+
+    def _confirm_set_group(self, group: str | None) -> None:
+        if group is None:
+            return
+        session_id = self._active_session_id
+        if session_id is None:
+            return
+        self._session_manager.set_session_group(session_id, group)
+        try:
+            session = self._session_manager.get_session(session_id)
+        except KeyError:
+            return
+        sidebar = self.query_one(SessionSidebar)
+        sidebar.update_session(session)
+        log.info("Set group for session %s to '%s'", session_id, group)
 
     def action_export_session(self) -> None:
         """Export the active session's output buffer to a text file."""
@@ -750,6 +867,38 @@ class TAMEApp(App):
         except Exception:
             pass
 
+    def action_global_search(self) -> None:
+        """Open a global search dialog across all session output buffers."""
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette, SearchDialog)):
+            return
+        sessions_data: list[tuple[str, str, str]] = []
+        for session in self._session_manager.list_sessions():
+            sessions_data.append(
+                (session.id, session.name, session.output_buffer.get_all_text())
+            )
+        self.push_screen(
+            SearchDialog(sessions_data),
+            callback=self._handle_search_result,
+        )
+
+    def _handle_search_result(self, session_id: str | None) -> None:
+        if session_id is not None:
+            self._select_session(session_id)
+
+    def action_show_diff(self) -> None:
+        """Show git diff for the active session's working directory."""
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette, DiffViewer)):
+            return
+        if self._active_session_id is None:
+            return
+        try:
+            session = self._session_manager.get_session(self._active_session_id)
+        except KeyError:
+            return
+        from tame.git.diff import git_diff
+        result = git_diff(session.working_dir)
+        self.push_screen(DiffViewer(result, title=f"Diff: {session.name}"))
+
     def action_focus_search(self) -> None:
         if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
             return
@@ -818,6 +967,7 @@ class TAMEApp(App):
 
         viewer = self.query_one(SessionViewer)
         viewer.load_session(session_id, session.output_buffer)
+        self._refresh_viewer_from_tmux_snapshot(session)
         viewer.focus()
         self._resize_active_session()
 
@@ -855,6 +1005,17 @@ class TAMEApp(App):
         self._output_pending.setdefault(session_id, []).append(text)
         if not self._app_focused:
             return
+        # Redraw-heavy control chunks (cursor movement / clear / CR redraw)
+        # are latency-sensitive and can artifact if delayed behind batching.
+        if (
+            session_id == self._active_session_id
+            and self._is_redraw_control_chunk(text)
+        ):
+            if self._output_flush_timer is not None:
+                self._output_flush_timer.stop()
+                self._output_flush_timer = None
+            self._flush_pending_output()
+            return
         # Small output (keystroke echo): flush immediately
         total = sum(len(c) for chunks in self._output_pending.values() for c in chunks)
         if total <= 64:
@@ -866,6 +1027,10 @@ class TAMEApp(App):
             self._output_flush_timer = self.set_timer(
                 0.016, self._flush_pending_output, name="output_flush"
             )
+
+    @staticmethod
+    def _is_redraw_control_chunk(text: str) -> bool:
+        return bool(REDRAW_CONTROL_RE.search(text))
 
     def _flush_pending_output(self) -> None:
         """Drain accumulated output — one pyte.feed() per session."""
@@ -879,7 +1044,12 @@ class TAMEApp(App):
         for session_id, chunks in pending.items():
             combined = "".join(chunks)
             if session_id == self._active_session_id:
-                viewer.append_output(combined)
+                try:
+                    session = self._session_manager.get_session(session_id)
+                except KeyError:
+                    continue
+                if not self._refresh_viewer_from_tmux_snapshot(session):
+                    viewer.append_output(combined)
             else:
                 # Background session: discard cached pyte state so it
                 # rebuilds from OutputBuffer when the user switches to it.
@@ -923,6 +1093,9 @@ class TAMEApp(App):
 
         sidebar = self.query_one(SessionSidebar)
         restored_count = 0
+        viewer = self.query_one(SessionViewer)
+        rows = max(1, viewer.size.height) if viewer.size.height else 24
+        cols = max(1, viewer.size.width) if viewer.size.width else 80
         for tmux_session in tmux_sessions:
             display_name = self._display_name_for_tmux_session(tmux_session)
             try:
@@ -931,6 +1104,8 @@ class TAMEApp(App):
                     working_dir,
                     shell=self._default_shell,
                     command=["tmux", "attach-session", "-t", tmux_session],
+                    rows=rows,
+                    cols=cols,
                 )
             except Exception:
                 log.exception("Failed to restore tmux session '%s'", tmux_session)
@@ -971,6 +1146,9 @@ class TAMEApp(App):
             working_dir = os.path.expanduser("~")
 
         sidebar = self.query_one(SessionSidebar)
+        viewer = self.query_one(SessionViewer)
+        rows = max(1, viewer.size.height) if viewer.size.height else 24
+        cols = max(1, viewer.size.width) if viewer.size.width else 80
         restored_count = 0
         for tmux_session in tmux_sessions:
             display_name = self._display_name_for_tmux_session(tmux_session)
@@ -980,6 +1158,8 @@ class TAMEApp(App):
                     working_dir,
                     shell=self._default_shell,
                     command=["tmux", "attach-session", "-t", tmux_session],
+                    rows=rows,
+                    cols=cols,
                 )
             except Exception:
                 log.exception("Failed to restore tmux session '%s'", tmux_session)
@@ -1010,6 +1190,81 @@ class TAMEApp(App):
         if proc.returncode != 0:
             return ""
         return proc.stdout
+
+    def _capture_tmux_pane_render(self, tmux_session: str) -> str | None:
+        """Capture a tmux pane snapshot for stable text rendering."""
+        proc = subprocess.run(
+            ["tmux", "capture-pane", "-p", "-e", "-t", tmux_session],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return None
+        return self._sanitize_tmux_snapshot_ansi(proc.stdout)
+
+    @staticmethod
+    def _sanitize_tmux_snapshot_ansi(text: str) -> str:
+        """Keep foreground styling while stripping background/reverse SGR attrs."""
+
+        def _repl(match: re.Match[str]) -> str:
+            params = match.group(1)
+            if params == "":
+                return match.group(0)  # ESC[m == reset
+            parts = params.split(";")
+            kept: list[str] = []
+            i = 0
+            while i < len(parts):
+                part = parts[i]
+                if part == "":
+                    kept.append(part)
+                    i += 1
+                    continue
+                if not part.isdigit():
+                    kept.append(part)
+                    i += 1
+                    continue
+                code = int(part)
+
+                # Strip reverse-video toggles.
+                if code in (7, 27):
+                    i += 1
+                    continue
+                # Strip background default + classic/bright background palette.
+                if code == 49 or 40 <= code <= 47 or 100 <= code <= 107:
+                    i += 1
+                    continue
+                # Strip extended background color sequences: 48;5;N / 48;2;R;G;B.
+                if code == 48:
+                    if i + 1 < len(parts) and parts[i + 1] == "5" and i + 2 < len(parts):
+                        i += 3
+                        continue
+                    if i + 1 < len(parts) and parts[i + 1] == "2" and i + 4 < len(parts):
+                        i += 5
+                        continue
+                    i += 1
+                    continue
+
+                kept.append(part)
+                i += 1
+
+            if not kept:
+                return ""
+            return f"\x1b[{';'.join(kept)}m"
+
+        return SGR_RE.sub(_repl, text)
+
+    def _refresh_viewer_from_tmux_snapshot(self, session) -> bool:
+        if not (self._tmux_snapshot_render and self._tmux_available):
+            return False
+        tmux_session = session.metadata.get("tmux_session_name")
+        if not tmux_session:
+            return False
+        snapshot = self._capture_tmux_pane_render(str(tmux_session))
+        if snapshot is None:
+            return False
+        self.query_one(SessionViewer).show_snapshot(snapshot)
+        return True
 
     def _list_existing_tmux_sessions(self) -> list[str]:
         proc = subprocess.run(
@@ -1109,30 +1364,42 @@ class TAMEApp(App):
         self.set_interval(interval, self._poll_resources, name="resource_poll")
 
     def _poll_resources(self) -> None:
-        """Update HeaderBar with CPU/MEM for the active session's process."""
-        if self._active_session_id is None:
-            return
-        try:
-            session = self._session_manager.get_session(self._active_session_id)
-        except KeyError:
-            return
-        if session.pid is None:
-            return
+        """Update HeaderBar and sidebar items with CPU/MEM for all sessions."""
         try:
             import psutil
+        except ImportError:
+            return
 
-            proc = psutil.Process(session.pid)
-            cpu = proc.cpu_percent(interval=0)
-            mem_info = proc.memory_info()
-            mem_mb = mem_info.rss / (1024 * 1024)
-            if mem_mb >= 1024:
-                mem_str = f"{mem_mb / 1024:.1f}GB"
-            else:
-                mem_str = f"{mem_mb:.0f}MB"
-            header = self.query_one(HeaderBar)
-            header.update_system_stats(cpu, mem_str)
-        except Exception:
-            pass
+        from tame.ui.widgets.session_list_item import SessionListItem
+
+        for session in self._session_manager.list_sessions():
+            if session.pid is None:
+                continue
+            try:
+                proc = psutil.Process(session.pid)
+                cpu = proc.cpu_percent(interval=0)
+                mem_info = proc.memory_info()
+                mem_mb = mem_info.rss / (1024 * 1024)
+                if mem_mb >= 1024:
+                    mem_str = f"{mem_mb / 1024:.1f}GB"
+                else:
+                    mem_str = f"{mem_mb:.0f}MB"
+
+                # Update sidebar list item
+                try:
+                    item = self.query_one(
+                        f"#session-item-{session.id}", SessionListItem
+                    )
+                    item.update_resources(cpu, mem_str)
+                except Exception:
+                    pass
+
+                # Update header for the active session
+                if session.id == self._active_session_id:
+                    header = self.query_one(HeaderBar)
+                    header.update_system_stats(cpu, mem_str)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Cleanup

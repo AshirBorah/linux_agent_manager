@@ -55,8 +55,9 @@ def app(tmp_path, monkeypatch) -> TAMEApp:
         working_dir: str,
         shell: str | None = None,
         command: list[str] | None = None,
+        **kwargs,
     ) -> Session:
-        del shell, command
+        del shell, command, kwargs
         return _make_session(app, name)
 
     monkeypatch.setattr(app._session_manager, "create_session", _fake_create_session)

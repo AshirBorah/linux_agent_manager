@@ -19,7 +19,7 @@ def _make_manager_with_session() -> tuple[
     ) -> None:
         transitions.append((old, new))
 
-    manager = SessionManager(on_status_change=on_status)
+    manager = SessionManager(on_status_change=on_status, state_debounce_ms=0)
     now = datetime.now(timezone.utc)
     session = Session(
         id="s1",
@@ -160,7 +160,7 @@ def _make_manager_with_pty_session(
     ) -> None:
         transitions.append((old, new))
 
-    manager = SessionManager(on_status_change=on_status)
+    manager = SessionManager(on_status_change=on_status, state_debounce_ms=0)
     now = datetime.now(timezone.utc)
     session = Session(
         id="s1",
@@ -278,41 +278,36 @@ def test_paused_gives_paused() -> None:
 # ------------------------------------------------------------------
 
 
-def test_check_idle_sessions_transitions_to_idle() -> None:
+def test_idle_timer_fires_transitions_to_idle() -> None:
     manager, session, transitions = _make_manager_with_session()
-    # Simulate old last_activity
-    session.last_activity = datetime.now(timezone.utc) - timedelta(seconds=400)
-    manager._check_idle_sessions()
+    # Directly fire the idle timeout callback
+    manager._fire_idle_timeout(session.id)
     assert session.status is SessionState.IDLE
     assert (SessionState.ACTIVE, SessionState.IDLE) in transitions
 
 
-def test_check_idle_sessions_skips_non_running() -> None:
+def test_idle_timer_skips_non_running() -> None:
     manager, session, transitions = _make_manager_with_session()
     session.process_state = ProcessState.EXITED
-    session.last_activity = datetime.now(timezone.utc) - timedelta(seconds=400)
-    manager._check_idle_sessions()
+    manager._fire_idle_timeout(session.id)
     # Should NOT transition — process already exited
     assert session.attention_state is AttentionState.NONE
     assert transitions == []
 
 
-def test_check_idle_sessions_skips_already_attention() -> None:
+def test_idle_timer_skips_already_attention() -> None:
     manager, session, transitions = _make_manager_with_session()
     session.attention_state = AttentionState.NEEDS_INPUT
-    session.last_activity = datetime.now(timezone.utc) - timedelta(seconds=400)
-    manager._check_idle_sessions()
+    manager._fire_idle_timeout(session.id)
     # Should NOT overwrite NEEDS_INPUT with IDLE
     assert session.attention_state is AttentionState.NEEDS_INPUT
     assert transitions == []
 
 
-def test_check_idle_sessions_respects_threshold() -> None:
+def test_idle_timer_skips_unknown_session() -> None:
     manager, session, transitions = _make_manager_with_session()
-    # Activity just 10 seconds ago — below the 300s default threshold
-    session.last_activity = datetime.now(timezone.utc) - timedelta(seconds=10)
-    manager._check_idle_sessions()
-    assert session.attention_state is AttentionState.NONE
+    # Fire with a non-existent session ID — should not raise
+    manager._fire_idle_timeout("nonexistent-id")
     assert transitions == []
 
 
@@ -381,3 +376,64 @@ def test_new_output_cancels_weak_prompt_timer() -> None:
     manager._cancel_weak_prompt_timer(session.id)
     # Timer should be gone
     assert session.id not in manager._weak_prompt_timers
+
+
+# ------------------------------------------------------------------
+# Batch pattern matching — last match wins within a chunk
+# ------------------------------------------------------------------
+
+
+def test_error_then_prompt_in_same_chunk_yields_waiting() -> None:
+    """When error and prompt appear in the same output chunk, the prompt
+    (later line) should win — final state is WAITING, not ERROR."""
+    manager, session, transitions = _make_manager_with_session()
+
+    chunk = (
+        b"Traceback (most recent call last)\n"
+        b"  File 'foo.py', line 42\n"
+        b"Some recovery output\n"
+        b"Do you want to proceed? [y/n]\n"
+    )
+    manager._on_session_output(session.id, chunk)
+    assert session.status is SessionState.WAITING
+    assert session.attention_state is AttentionState.NEEDS_INPUT
+
+
+def test_prompt_then_error_in_same_chunk_yields_error() -> None:
+    """When prompt appears before error in the same chunk, error wins."""
+    manager, session, transitions = _make_manager_with_session()
+
+    chunk = (
+        b"Continue? [y/n]\n"
+        b"Traceback (most recent call last)\n"
+    )
+    manager._on_session_output(session.id, chunk)
+    assert session.status is SessionState.ERROR
+    assert session.attention_state is AttentionState.ERROR_SEEN
+
+
+def test_split_utf8_multibyte_across_chunks_preserved() -> None:
+    seen: list[str] = []
+    manager, session, _ = _make_manager_with_session()
+    manager._on_output = lambda _sid, text: seen.append(text)
+
+    # '€' split across PTY reads: e2 82 ac
+    manager._on_session_output(session.id, b"price: \xe2")
+    manager._on_session_output(session.id, b"\x82\xac\n")
+
+    assert "price: €" in session.output_buffer.get_all_text()
+    assert "\ufffd" not in session.output_buffer.get_all_text()
+    assert "".join(seen) == "price: €\n"
+
+
+def test_decoder_flushed_on_eof() -> None:
+    seen: list[str] = []
+    manager, session, _ = _make_manager_with_session()
+    manager._on_output = lambda _sid, text: seen.append(text)
+
+    # Incomplete multibyte code point should emit replacement only at EOF.
+    manager._on_session_output(session.id, b"incomplete: \xe2")
+    manager._on_session_output(session.id, b"")
+
+    assert "incomplete: \ufffd" in session.output_buffer.get_all_text()
+    assert "".join(seen).startswith("incomplete: ")

@@ -39,6 +39,8 @@ class Session:
     pty_process: PTYProcess | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     usage: UsageInfo = field(default_factory=UsageInfo)
+    profile: str = ""
+    group: str = ""
 
     @property
     def status(self) -> SessionState:

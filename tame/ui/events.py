@@ -53,3 +53,21 @@ class SidebarFlash(Message):
     def __init__(self, session_id: str) -> None:
         super().__init__()
         self.session_id = session_id
+
+
+class ViewerResized(Message):
+    """Viewer dimensions changed — PTY should be resized to match."""
+
+    def __init__(self, rows: int, cols: int) -> None:
+        super().__init__()
+        self.rows = rows
+        self.cols = cols
+
+
+class GroupToggled(Message):
+    """A group's collapsed state was toggled in the sidebar."""
+
+    def __init__(self, group: str, collapsed: bool) -> None:
+        super().__init__()
+        self.group = group
+        self.collapsed = collapsed

@@ -30,10 +30,16 @@ class PTYProcess:
         cwd: str = ".",
         env: dict[str, str] | None = None,
         command: list[str] | None = None,
+        rows: int = 24,
+        cols: int = 80,
     ) -> None:
         master_fd, slave_fd = pty.openpty()
         self._master_fd = master_fd
         self._slave_fd = slave_fd
+
+        # Set PTY size BEFORE spawning child so it inherits correct dimensions.
+        winsize = struct.pack("HHHH", rows, cols, 0, 0)
+        fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
 
         spawn_env = os.environ.copy()
         if env:
