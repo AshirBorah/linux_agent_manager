@@ -67,6 +67,7 @@ class SessionListItem(Static):
         self.session_id = session_id
         self._session_name = name
         self._status = status
+        self._resource_str = ""
 
     def render(self) -> Text:
         """Render session row text directly each paint for reliability."""
@@ -81,7 +82,14 @@ class SessionListItem(Static):
         badge = ATTENTION_BADGE.get(self._status)
         if badge:
             line.append(badge[0], style=badge[1])
+        if self._resource_str:
+            line.append(f"  {self._resource_str}", style="dim")
         return line
+
+    def update_resources(self, cpu: float, mem_str: str) -> None:
+        """Update the resource usage display for this session."""
+        self._resource_str = f"{cpu:.0f}% {mem_str}"
+        self.refresh()
 
     def _name_style(self) -> str:
         """Use explicit high-contrast session-name color for readability."""

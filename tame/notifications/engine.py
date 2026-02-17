@@ -9,6 +9,7 @@ from .desktop import DesktopNotifier
 from .history import NotificationHistory
 from .models import EVENT_PRIORITY, EventType, NotificationEvent, Priority
 from .slack import SlackNotifier
+from .webhook import WebhookNotifier
 
 # Seconds before the same (session, event_type) can fire again.
 _DEFAULT_COOLDOWN: dict[EventType, float] = {
@@ -77,6 +78,14 @@ class NotificationEngine:
             webhook_url=slack_cfg.get("webhook_url", ""),
             verbosity=int(slack_cfg.get("verbosity", 10)),
             sessions=slack_cfg.get("sessions"),
+        )
+
+        webhook_cfg = config.get("webhook", {})
+        self._webhook = WebhookNotifier(
+            enabled=webhook_cfg.get("enabled", False),
+            url=webhook_cfg.get("url", ""),
+            headers=webhook_cfg.get("headers"),
+            timeout=float(webhook_cfg.get("timeout", 5.0)),
         )
 
         self._routing: dict[str, dict[str, bool]] = config.get(
@@ -153,6 +162,9 @@ class NotificationEngine:
 
         # Slack has its own event/session filtering (not tied to routing table)
         self._slack.notify(event)
+
+        # Webhook dispatch (independent of routing table)
+        self._webhook.notify(event)
 
         return event
 

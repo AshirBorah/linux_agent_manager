@@ -146,6 +146,12 @@ DEFAULT_CONFIG: dict = {
             "verbosity": 10,
             "sessions": [],
         },
+        "webhook": {
+            "enabled": False,
+            "url": "",
+            "headers": {},
+            "timeout": 5.0,
+        },
         "toast": {
             "enabled": True,
             "display_seconds": 5,
@@ -244,6 +250,7 @@ DEFAULT_CONFIG: dict = {
         "toggle_sidebar": "f6",
         "resume_all": "f7",
         "pause_all": "f8",
+        "show_diff": "f10",
         "set_group": "f11",
         "quit": "f12",
         "session_1": "alt+1",

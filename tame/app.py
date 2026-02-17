@@ -31,11 +31,13 @@ from tame.ui.themes.manager import ThemeManager
 from tame.ui.widgets import (
     CommandPalette,
     ConfirmDialog,
+    DiffViewer,
     EasterEgg,
     GroupDialog,
     HeaderBar,
     HistoryPicker,
     NameDialog,
+    SearchDialog,
     SessionSidebar,
     SessionViewer,
     StatusBar,
@@ -156,6 +158,7 @@ class TAMEApp(App):
         "toggle_sidebar": ("Toggle Sidebar", True, False),
         "resume_all": ("Resume All", False, False),
         "pause_all": ("Pause All", False, False),
+        "show_diff": ("Git Diff", False, False),
         "set_group": ("Set Group", False, False),
         "quit": ("Quit", True, False),
         "session_1": ("Session 1", False, False),
@@ -173,6 +176,7 @@ class TAMEApp(App):
     BINDINGS = [
         Binding("ctrl+c", "send_sigint", "Send SIGINT", show=False, priority=True),
         Binding("ctrl+d", "send_eof", "Send EOF", show=False, priority=True),
+        Binding("ctrl+f", "global_search", "Global Search", show=False, priority=True),
         Binding("tab", "send_tab", "Tab Complete", show=False, priority=True),
     ]
 
@@ -802,6 +806,38 @@ class TAMEApp(App):
         except Exception:
             pass
 
+    def action_global_search(self) -> None:
+        """Open a global search dialog across all session output buffers."""
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette, SearchDialog)):
+            return
+        sessions_data: list[tuple[str, str, str]] = []
+        for session in self._session_manager.list_sessions():
+            sessions_data.append(
+                (session.id, session.name, session.output_buffer.get_all_text())
+            )
+        self.push_screen(
+            SearchDialog(sessions_data),
+            callback=self._handle_search_result,
+        )
+
+    def _handle_search_result(self, session_id: str | None) -> None:
+        if session_id is not None:
+            self._select_session(session_id)
+
+    def action_show_diff(self) -> None:
+        """Show git diff for the active session's working directory."""
+        if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette, DiffViewer)):
+            return
+        if self._active_session_id is None:
+            return
+        try:
+            session = self._session_manager.get_session(self._active_session_id)
+        except KeyError:
+            return
+        from tame.git.diff import git_diff
+        result = git_diff(session.working_dir)
+        self.push_screen(DiffViewer(result, title=f"Diff: {session.name}"))
+
     def action_focus_search(self) -> None:
         if isinstance(self.screen, (NameDialog, ConfirmDialog, CommandPalette)):
             return
@@ -1267,30 +1303,42 @@ class TAMEApp(App):
         self.set_interval(interval, self._poll_resources, name="resource_poll")
 
     def _poll_resources(self) -> None:
-        """Update HeaderBar with CPU/MEM for the active session's process."""
-        if self._active_session_id is None:
-            return
-        try:
-            session = self._session_manager.get_session(self._active_session_id)
-        except KeyError:
-            return
-        if session.pid is None:
-            return
+        """Update HeaderBar and sidebar items with CPU/MEM for all sessions."""
         try:
             import psutil
+        except ImportError:
+            return
 
-            proc = psutil.Process(session.pid)
-            cpu = proc.cpu_percent(interval=0)
-            mem_info = proc.memory_info()
-            mem_mb = mem_info.rss / (1024 * 1024)
-            if mem_mb >= 1024:
-                mem_str = f"{mem_mb / 1024:.1f}GB"
-            else:
-                mem_str = f"{mem_mb:.0f}MB"
-            header = self.query_one(HeaderBar)
-            header.update_system_stats(cpu, mem_str)
-        except Exception:
-            pass
+        from tame.ui.widgets.session_list_item import SessionListItem
+
+        for session in self._session_manager.list_sessions():
+            if session.pid is None:
+                continue
+            try:
+                proc = psutil.Process(session.pid)
+                cpu = proc.cpu_percent(interval=0)
+                mem_info = proc.memory_info()
+                mem_mb = mem_info.rss / (1024 * 1024)
+                if mem_mb >= 1024:
+                    mem_str = f"{mem_mb / 1024:.1f}GB"
+                else:
+                    mem_str = f"{mem_mb:.0f}MB"
+
+                # Update sidebar list item
+                try:
+                    item = self.query_one(
+                        f"#session-item-{session.id}", SessionListItem
+                    )
+                    item.update_resources(cpu, mem_str)
+                except Exception:
+                    pass
+
+                # Update header for the active session
+                if session.id == self._active_session_id:
+                    header = self.query_one(HeaderBar)
+                    header.update_system_stats(cpu, mem_str)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Cleanup
