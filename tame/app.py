@@ -101,11 +101,6 @@ CTRL_SPECIAL_SEQUENCES: dict[str, str] = {
 
 class TAMEApp(App):
     CSS = """
-    Screen {
-        background: #1e1e1e;
-        color: #d4d4d4;
-    }
-
     #main-content {
         height: 1fr;
         width: 1fr;
@@ -621,6 +616,9 @@ class TAMEApp(App):
         css_path = self._theme_manager.get_css_path()
         if css_path:
             self.stylesheet.source.clear()
+            # Re-add the app's structural layout CSS first
+            self.stylesheet.add_source(self.CSS, read_from=("TAMEApp", ""))
+            # Then add the new theme CSS (Screen colors, widget colors)
             self.stylesheet.add_source(
                 css_path.read_text(), read_from=(str(css_path), "")
             )
