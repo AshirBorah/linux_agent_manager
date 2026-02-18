@@ -25,15 +25,18 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --dev
-      - run: uv run mypy tame/ --ignore-missing-imports
+      - run: uv run mypy tame/
 
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - run: uv sync --dev
       - run: uv run pytest tests/ --tb=short -v
 
