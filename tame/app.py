@@ -312,20 +312,8 @@ class TAMEApp(App):
         # Easter egg: triggers once per app run
         self._easter_egg_shown: bool = False
 
-    @staticmethod
-    def _letta_available() -> bool:
-        """Check if the letta-client package is installed."""
-        try:
-            import letta_client  # noqa: F401
-
-            return True
-        except ImportError:
-            return False
-
     def _init_memory_bridge(self, cfg: dict):  # noqa: ANN201
-        """Conditionally create the memory bridge if letta-client is installed."""
-        if not self._letta_available():
-            return None
+        """Create the memory bridge. Auto-connects if previously enabled."""
         from tame.integrations.letta import MemoryBridge
 
         letta_cfg = cfg.get("letta", {})
@@ -1017,26 +1005,19 @@ class TAMEApp(App):
 
     def action_toggle_memory(self) -> None:
         """Toggle session memory on/off."""
-        if not self._letta_available():
-            self._show_toast(
-                "Memory",
-                "letta-client not installed. Run: pip install tame[memory]",
-            )
-            return
         if self._memory_bridge is None:
-            # First-time init (shouldn't normally happen if letta is installed)
-            cfg = self._config_manager.config
-            from tame.integrations.letta import MemoryBridge
-
-            letta_cfg = cfg.get("letta", {})
-            server_url = str(letta_cfg.get("server_url", "http://localhost:8283"))
-            self._memory_bridge = MemoryBridge(server_url)
+            return
 
         if not self._memory_ever_enabled:
             # First time — show onboarding dialog
-            server_url = self._memory_bridge._server_url
+            from tame.integrations.letta.bridge import _is_letta_installed
+
+            needs_install = not _is_letta_installed()
             self.push_screen(
-                MemoryEnableDialog(server_url),
+                MemoryEnableDialog(
+                    self._memory_bridge._server_url,
+                    needs_install=needs_install,
+                ),
                 callback=self._handle_memory_enable,
             )
         else:
@@ -1048,11 +1029,18 @@ class TAMEApp(App):
     def _handle_memory_enable(self, confirmed: bool | None) -> None:
         if not confirmed or self._memory_bridge is None:
             return
-        ok, msg = self._memory_bridge.enable()
+        self._show_toast("Memory", "Setting up memory...")
+        self._update_memory_status()
+        self._run_memory_setup()
+
+    async def _run_memory_setup(self) -> None:
+        """Run the full setup (install + server + connect) in an executor."""
+        assert self._memory_bridge is not None
+        loop = asyncio.get_running_loop()
+        ok, msg = await loop.run_in_executor(None, self._memory_bridge.setup)
         self._show_toast("Memory", msg)
         if ok:
             self._memory_ever_enabled = True
-            # Persist enabled state to config
             cfg = self._config_manager.config
             cfg.setdefault("letta", {})["enabled"] = True
             self._config_manager.save(cfg)
@@ -1060,13 +1048,7 @@ class TAMEApp(App):
 
     def action_recall_memory(self) -> None:
         """Open the memory recall dialog to query past session events."""
-        if not self._letta_available() or self._memory_bridge is None:
-            self._show_toast(
-                "Memory",
-                "Memory not available. Toggle memory on first.",
-            )
-            return
-        if not self._memory_bridge.is_connected:
+        if self._memory_bridge is None or not self._memory_bridge.is_connected:
             self._show_toast(
                 "Memory",
                 "Memory not connected. Toggle memory on first.",
@@ -1076,10 +1058,7 @@ class TAMEApp(App):
 
     def action_clear_memory(self) -> None:
         """Open confirmation dialog to clear all session memory."""
-        if not self._letta_available() or self._memory_bridge is None:
-            self._show_toast("Memory", "Memory not available.")
-            return
-        if not self._memory_bridge.is_connected:
+        if self._memory_bridge is None or not self._memory_bridge.is_connected:
             self._show_toast("Memory", "Memory not connected.")
             return
         self.push_screen(
@@ -1725,3 +1704,5 @@ class TAMEApp(App):
 
     def on_unmount(self) -> None:
         self._session_manager.close_all()
+        if self._memory_bridge is not None:
+            self._memory_bridge.stop_server()

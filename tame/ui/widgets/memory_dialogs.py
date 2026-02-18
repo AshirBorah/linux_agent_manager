@@ -49,9 +49,10 @@ class MemoryEnableDialog(ModalScreen[bool]):
     }
     """
 
-    def __init__(self, server_url: str) -> None:
+    def __init__(self, server_url: str, needs_install: bool = False) -> None:
         super().__init__()
         self._server_url = server_url
+        self._needs_install = needs_install
 
     def compose(self) -> ComposeResult:
         with Vertical(id="mem-enable-box"):
@@ -61,13 +62,19 @@ class MemoryEnableDialog(ModalScreen[bool]):
                 "— errors, fixes, patterns.",
                 classes="mem-desc",
             )
+            if self._needs_install:
+                yield Label(
+                    "This will install letta-client and start a local "
+                    "memory server automatically.",
+                    classes="mem-desc",
+                )
+            else:
+                yield Label(
+                    "This uses Letta to store session events locally on your machine.",
+                    classes="mem-desc",
+                )
             yield Label(
-                "This uses Letta to store session events locally on your machine.",
-                classes="mem-desc",
-            )
-            yield Label(
-                f"Server: {self._server_url}\n"
-                "(configure in ~/.config/tame/config.toml)",
+                f"Server: {self._server_url}",
                 classes="mem-server",
             )
             from textual.containers import Horizontal
