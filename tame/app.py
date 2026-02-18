@@ -629,6 +629,14 @@ class TAMEApp(App):
                 widget.styles.color = wfg
             except Exception:
                 pass
+        # Sidebar is queried by type (no fixed ID)
+        sbg, sfg = colors["sidebar"]
+        try:
+            sidebar = self.query_one(SessionSidebar)
+            sidebar.styles.background = sbg
+            sidebar.styles.color = sfg
+        except Exception:
+            pass
         log.info("Switched theme to '%s'", new_theme)
 
     def action_delete_session(self) -> None:
