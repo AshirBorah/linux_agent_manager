@@ -68,8 +68,8 @@ class SessionSearchBar(Widget):
         self.query_one("#session-search-input", Input).value = ""
         self.post_message(SearchDismissed())
 
-    @property
-    def visible(self) -> bool:  # type: ignore[misc]
+    @property  # type: ignore[misc]
+    def visible(self) -> bool:
         return self.has_class("visible")
 
     def update_match_count(self, current: int, total: int) -> None:
