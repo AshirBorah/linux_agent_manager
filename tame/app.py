@@ -1031,7 +1031,7 @@ class TAMEApp(App):
             return
         self._show_toast("Memory", "Setting up memory...")
         self._update_memory_status()
-        self._run_memory_setup()
+        self.call_later(self._run_memory_setup)
 
     async def _run_memory_setup(self) -> None:
         """Run the full setup (install + server + connect) in an executor."""
