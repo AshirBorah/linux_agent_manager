@@ -6,6 +6,7 @@ from .diff_viewer import DiffViewer
 from .easter_egg import EasterEgg
 from .group_dialog import GroupDialog
 from .header_bar import HeaderBar
+from .memory_dialogs import MemoryClearDialog, MemoryEnableDialog, MemoryRecallDialog
 from .history_picker import HistoryPicker
 from .name_dialog import NameDialog
 from .notification_panel import NotificationPanel
@@ -24,6 +25,9 @@ __all__ = [
     "EasterEgg",
     "GroupDialog",
     "HeaderBar",
+    "MemoryClearDialog",
+    "MemoryEnableDialog",
+    "MemoryRecallDialog",
     "HistoryPicker",
     "NameDialog",
     "NotificationPanel",

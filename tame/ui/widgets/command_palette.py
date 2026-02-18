@@ -27,6 +27,9 @@ COMMAND_ENTRIES: list[tuple[str, str, str]] = [
     ("x", "clear_notifications", "Clear Notifications"),
     ("w", "set_group", "Set Group"),
     ("v", "show_diff", "Git Diff"),
+    ("y", "toggle_memory", "Toggle Memory"),
+    ("a", "recall_memory", "Ask Memory"),
+    ("j", "clear_memory", "Clear Memory"),
     ("q", "quit", "Quit"),
 ]
 

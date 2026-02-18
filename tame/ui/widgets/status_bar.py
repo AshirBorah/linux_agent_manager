@@ -23,6 +23,7 @@ class StatusBar(Static):
         self._active: int = 0
         self._waiting: int = 0
         self._errors: int = 0
+        self._memory_status: str = ""
         self._refresh_display()
 
     def update_stats(self, total: int, active: int, waiting: int, errors: int) -> None:
@@ -31,6 +32,11 @@ class StatusBar(Static):
         self._active = active
         self._waiting = waiting
         self._errors = errors
+        self._refresh_display()
+
+    def set_memory_status(self, status: str) -> None:
+        """Update the memory indicator. Empty string hides it."""
+        self._memory_status = status
         self._refresh_display()
 
     def _refresh_display(self) -> None:
@@ -43,4 +49,8 @@ class StatusBar(Static):
             "F2 New | F3/F4 \u2190\u2192 | F6 Sidebar | F7/F8 \u25b6/\u23f8"
             " | F9 Rename | C-SPC Cmd | F12 Quit"
         )
-        self.update(f"{stats}  {keys}")
+        parts = [stats]
+        if self._memory_status:
+            parts.append(f"[Memory: {self._memory_status}]")
+        parts.append(keys)
+        self.update("  ".join(parts))

@@ -246,6 +246,10 @@ DEFAULT_CONFIG: dict = {
         "worktrees_enabled": False,
         "repo_dir": "",
     },
+    "letta": {
+        "enabled": False,
+        "server_url": "http://localhost:8283",
+    },
     "keybindings": {
         "new_session": "f2",
         "rename_session": "f9",

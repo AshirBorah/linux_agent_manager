@@ -44,6 +44,9 @@ audio = [
     "pygame>=2.5.0",
     "simpleaudio>=1.0.4",
 ]
+memory = [
+    "letta-client>=0.1.0",
+]
 
 [dependency-groups]
 dev = [

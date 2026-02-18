@@ -17,6 +17,7 @@ def test_default_config_has_all_sections() -> None:
         "keybindings",
         "profiles",
         "git",
+        "letta",
     }
     assert expected == set(DEFAULT_CONFIG.keys())
 
