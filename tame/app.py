@@ -613,18 +613,22 @@ class TAMEApp(App):
 
     def action_toggle_theme(self) -> None:
         new_theme = self._theme_manager.cycle()
-        css_path = self._theme_manager.get_css_path()
-        if css_path:
-            self.stylesheet.source.clear()
-            # Re-add the app's structural layout CSS first
-            self.stylesheet.add_source(self.CSS, read_from=("TAMEApp", ""))
-            # Then add the new theme CSS (Screen colors, widget colors)
-            self.stylesheet.add_source(
-                css_path.read_text(), read_from=(str(css_path), "")
-            )
-            self.stylesheet.set_variables(self.get_css_variables())
-            self.stylesheet.reparse()
-            self.stylesheet.update(self)
+        colors = self._theme_manager.get_colors()
+        bg, fg = colors["screen"]
+        self.screen.styles.background = bg
+        self.screen.styles.color = fg
+        for widget_key, widget_id in (
+            ("header", "header-bar"),
+            ("viewer", "session-viewer"),
+            ("status", "status-bar"),
+        ):
+            wbg, wfg = colors[widget_key]
+            try:
+                widget = self.query_one(f"#{widget_id}")
+                widget.styles.background = wbg
+                widget.styles.color = wfg
+            except Exception:
+                pass
         log.info("Switched theme to '%s'", new_theme)
 
     def action_delete_session(self) -> None:
