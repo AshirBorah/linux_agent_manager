@@ -1,0 +1,110 @@
+/* TAME Cherry Blossom Theme */
+
+Screen {
+    background: #fff0f5;
+    color: #4a3040;
+}
+
+#header-bar {
+    dock: top;
+    height: 1;
+    background: #d4678e;
+    color: #ffffff;
+    padding: 0 1;
+}
+
+#sidebar {
+    width: 28;
+    background: #ffe4ec;
+    border-right: solid #f0b8cc;
+}
+
+#sidebar-search {
+    margin: 0 1;
+    height: 1;
+}
+
+#session-list {
+    background: #ffe4ec;
+}
+
+.session-item {
+    padding: 0 1;
+    height: 1;
+}
+
+.session-item:hover {
+    background: #ffd0dc;
+}
+
+.session-item.--highlight {
+    background: #ffb6c8;
+}
+
+.session-item.status-active {
+    color: #5a9e5a;
+}
+
+.session-item.status-idle {
+    color: #b0909e;
+}
+
+.session-item.status-waiting {
+    color: #d4a058;
+}
+
+.session-item.status-error {
+    color: #c44569;
+}
+
+.session-item.status-done {
+    color: #5a9e5a;
+}
+
+.session-item.status-paused {
+    color: #b0909e;
+}
+
+#new-session-btn {
+    margin: 0 1;
+    height: 1;
+    background: #f0c0d0;
+    color: #4a3040;
+}
+
+#main-panel {
+    background: #fff0f5;
+}
+
+#session-header {
+    height: 2;
+    background: #ffe4ec;
+    padding: 0 1;
+    color: #8a607a;
+    border-bottom: solid #f0b8cc;
+}
+
+#session-viewer {
+    background: #fff0f5;
+    color: #4a3040;
+}
+
+#input-area {
+    dock: bottom;
+    height: 3;
+    background: #ffe4ec;
+    border-top: solid #f0b8cc;
+    padding: 0 1;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: #d4678e;
+    color: #ffffff;
+    padding: 0 1;
+}
+
+#toast-overlay {
+    layer: overlay;
+}

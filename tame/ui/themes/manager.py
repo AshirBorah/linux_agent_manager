@@ -16,6 +16,7 @@ BUILTIN_THEMES = [
     "gruvbox",
     "solarized_dark",
     "solarized_light",
+    "cherry_blossom",
 ]
 
 # Colors for widgets that actually exist in the app.
@@ -76,6 +77,13 @@ THEME_COLORS: dict[str, dict[str, tuple[str, str]]] = {
         "sidebar": ("#eee8d5", "#657b83"),
         "viewer": ("#fdf6e3", "#657b83"),
         "status": ("#268bd2", "#fdf6e3"),
+    },
+    "cherry_blossom": {
+        "screen": ("#fff0f5", "#4a3040"),
+        "header": ("#d4678e", "#ffffff"),
+        "sidebar": ("#ffe4ec", "#4a3040"),
+        "viewer": ("#fff0f5", "#4a3040"),
+        "status": ("#d4678e", "#ffffff"),
     },
 }
 
