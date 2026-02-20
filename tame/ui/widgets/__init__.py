@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .cherry_blossom_petals import CherryBlossomPetals
 from .command_palette import CommandPalette
 from .confirm_dialog import ConfirmDialog
 from .diff_viewer import DiffViewer
@@ -18,6 +19,7 @@ from .status_bar import StatusBar
 from .toast_overlay import ToastOverlay
 
 __all__ = [
+    "CherryBlossomPetals",
     "CommandPalette",
     "ConfirmDialog",
     "DiffViewer",

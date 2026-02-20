@@ -32,6 +32,7 @@ from tame.ui.events import (
 from tame.ui.keys.manager import KeybindManager
 from tame.ui.themes.manager import ThemeManager
 from tame.ui.widgets import (
+    CherryBlossomPetals,
     CommandPalette,
     ConfirmDialog,
     DiffViewer,
@@ -343,6 +344,7 @@ class TAMEApp(App):
                 yield SessionSearchBar()
         yield StatusBar()
         yield ToastOverlay()
+        yield CherryBlossomPetals()
 
     def on_mount(self) -> None:
         loop = asyncio.get_running_loop()
@@ -350,6 +352,12 @@ class TAMEApp(App):
         self.call_later(self._restore_tmux_sessions_async)
         self._start_resource_poll()
         self._start_tmux_health_check()
+        # Activate cherry blossom petals if starting with that theme.
+        if self._theme_manager.current == "cherry_blossom":
+            try:
+                self.query_one(CherryBlossomPetals).display = True
+            except Exception:
+                pass
         log.info("TAME started")
 
     # ------------------------------------------------------------------
@@ -639,6 +647,12 @@ class TAMEApp(App):
             sidebar = self.query_one(SessionSidebar)
             sidebar.styles.background = sbg
             sidebar.styles.color = sfg
+        except Exception:
+            pass
+        # Toggle cherry blossom petal animation.
+        try:
+            petals = self.query_one(CherryBlossomPetals)
+            petals.display = new_theme == "cherry_blossom"
         except Exception:
             pass
         log.info("Switched theme to '%s'", new_theme)
